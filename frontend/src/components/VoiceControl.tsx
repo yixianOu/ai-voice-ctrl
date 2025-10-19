@@ -1,84 +1,73 @@
 import React, { useState } from 'react';
-import { useVoiceRecognition } from '../hooks/useVoiceRecognition';
-import { ProcessVoiceCommand } from '../../wailsjs/go/main/App';
+import { StartRecording, StopRecording, ProcessVoiceCommand } from '../../wailsjs/go/main/App';
 import './VoiceControl.css';
 
 const VoiceControl: React.FC = () => {
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioFile, setAudioFile] = useState<string>('');
   const [commandResult, setCommandResult] = useState<string>('');
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string>('');
 
-  // 语音识别结果处理
-  const handleVoiceResult = async (result: any) => {
-    if (result.isFinal && result.transcript.trim()) {
-      console.log('识别结果:', result.transcript);
-      console.log('置信度:', result.confidence);
-
-      // 发送到后端处理
-      setIsProcessing(true);
-      try {
-        const response = await ProcessVoiceCommand(result.transcript);
-        setCommandResult(response);
-      } catch (error) {
-        console.error('命令处理失败:', error);
-        setCommandResult(`错误: ${error}`);
-      } finally {
-        setIsProcessing(false);
-      }
+  // 开始录音
+  const handleStartRecording = async () => {
+    try {
+      setError('');
+      const filePath = await StartRecording();
+      setAudioFile(filePath);
+      setIsRecording(true);
+      console.log('录音已开始，文件:', filePath);
+    } catch (err) {
+      console.error('启动录音失败:', err);
+      setError(`启动录音失败: ${err}`);
     }
   };
 
-  const {
-    isListening,
-    transcript,
-    confidence,
-    error,
-    startListening,
-    stopListening,
-    isSupported
-  } = useVoiceRecognition(handleVoiceResult, 'zh-CN');
+  // 停止录音
+  const handleStopRecording = async () => {
+    try {
+      const result = await StopRecording();
+      setIsRecording(false);
+      console.log('录音已停止:', result);
+      
+      // 显示录音文件路径
+      setCommandResult(`录音已保存: ${audioFile}`);
+    } catch (err) {
+      console.error('停止录音失败:', err);
+      setError(`停止录音失败: ${err}`);
+    }
+  };
 
-  if (!isSupported) {
-    return (
-      <div className="voice-control">
-        <div className="error-message">
-          ⚠️ 您的浏览器不支持语音识别功能
-        </div>
-      </div>
-    );
-  }
+  // 处理命令（用于文本输入测试）
+  const handleTestCommand = async (command: string) => {
+    try {
+      const result = await ProcessVoiceCommand(command);
+      setCommandResult(result);
+    } catch (err) {
+      console.error('命令执行失败:', err);
+      setError(`命令执行失败: ${err}`);
+    }
+  };
 
   return (
     <div className="voice-control">
       <h2>🎤 AI 语音助手</h2>
       
-      {/* 麦克风按钮 */}
+      {/* 录音按钮 */}
       <div className="mic-container">
         <button
-          className={`mic-button ${isListening ? 'listening' : ''}`}
-          onClick={isListening ? stopListening : startListening}
-          disabled={isProcessing}
+          className={`mic-button ${isRecording ? 'listening' : ''}`}
+          onClick={isRecording ? handleStopRecording : handleStartRecording}
         >
-          {isListening ? '🔴 停止' : '🎤 开始'}
+          {isRecording ? '🔴 停止录音' : '🎤 开始录音'}
         </button>
-        {isListening && <div className="pulse-ring"></div>}
+        {isRecording && <div className="pulse-ring"></div>}
       </div>
 
       {/* 状态显示 */}
       <div className="status">
-        {isListening && <span className="status-text">正在监听...</span>}
-        {isProcessing && <span className="status-text">处理中...</span>}
+        {isRecording && <span className="status-text">正在录音中...</span>}
+        {audioFile && !isRecording && <span className="status-text">录音文件: {audioFile}</span>}
       </div>
-
-      {/* 实时转录显示 */}
-      {transcript && (
-        <div className="transcript-box">
-          <h3>识别内容：</h3>
-          <p className="transcript">{transcript}</p>
-          {confidence > 0 && (
-            <p className="confidence">置信度: {(confidence * 100).toFixed(1)}%</p>
-          )}
-        </div>
-      )}
 
       {/* 命令执行结果 */}
       {commandResult && (
@@ -95,15 +84,18 @@ const VoiceControl: React.FC = () => {
         </div>
       )}
 
-      {/* 使用提示 */}
+      {/* 测试命令输入 */}
       <div className="tips">
-        <h3>💡 试试说：</h3>
-        <ul>
-          <li>"打开 Firefox"</li>
-          <li>"播放音乐"</li>
-          <li>"音量设为 50%"</li>
-          <li>"创建文件 test.txt"</li>
-        </ul>
+        <h3>💡 测试命令：</h3>
+        <div style={{ display: 'flex', gap: '10px', marginTop: '10px', flexWrap: 'wrap' }}>
+          <button onClick={() => handleTestCommand('打开火狐')}>打开火狐</button>
+          <button onClick={() => handleTestCommand('音量设为50%')}>音量50%</button>
+          <button onClick={() => handleTestCommand('播放音乐')}>播放音乐</button>
+          <button onClick={() => handleTestCommand('下一首')}>下一首</button>
+        </div>
+        <p style={{ marginTop: '20px', fontSize: '14px', color: '#666' }}>
+          提示：点击"开始录音"按钮后，会录制5秒音频。录音完成后需要手动实现音频转文字功能。
+        </p>
       </div>
     </div>
   );
