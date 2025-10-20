@@ -7,11 +7,7 @@
 ```mermaid
 flowchart TB
     subgraph Speech[语音输入]
-        STT["Whisper / Azure Speech"]
-    end
-
-    subgraph LLM[大模型理解层]
-        GPT["LLM<br/>(GPT-4 / Claude)<br/>- 意图识别<br/>- 参数提取<br/>- 多轮规划"]
+        Mic["麦克风输入"]
     end
 
     subgraph Wails[Wails 桌面应用]
@@ -20,10 +16,18 @@ flowchart TB
         end
 
         subgraph Backend[Go Backend]
-            Executor["Action Executor"]
             Recorder["AudioRecorder (malgo)"]
+            Relay["后端调度 / LLM 中转"]
             Adapter["VSCode / VLC 控制适配层"]
         end
+    end
+
+    subgraph STTService[语音识别服务]
+        STT["Whisper / Azure Speech"]
+    end
+
+    subgraph LLM[大模型理解层]
+        GPT["LLM<br/>(GPT-4 / Claude)"]
     end
 
     subgraph Clients[外部应用]
@@ -31,11 +35,16 @@ flowchart TB
         VSCode["VS Code<br/>CLI"]
     end
 
-    STT --> GPT
-    GPT -- 指令 --> Executor
-    View <-->|Wails RPC| Executor
-    Executor --> Adapter
+    Mic --> Recorder
+    Recorder --> Relay
+    Relay --> STT
+    STT --> Relay
+    Relay --> GPT
+    GPT --> Relay
+
+    View <-->|界面请求| Relay
+    Relay --> Adapter
     Adapter --> VLC
     Adapter --> VSCode
-    Recorder --> View
+    Relay --> View
 ```
