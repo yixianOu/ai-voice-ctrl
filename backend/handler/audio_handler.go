@@ -52,6 +52,7 @@ func DefaultAudioHandlerConfig(apiKey string) AudioHandlerConfig {
 	}
 }
 
+// TODO：integrate these two methods into one with options
 // NewAudioHandler creates a new audio handler with default config
 func NewAudioHandler(apiKey string) *AudioHandler {
 	return NewAudioHandlerWithConfig(DefaultAudioHandlerConfig(apiKey))
@@ -136,6 +137,8 @@ func (ah *AudioHandler) RecordAudioWithVAD() ([]byte, error) {
 
 // TranscribeAudioData transcribes pre-recorded audio data
 // Use this when you already have audio data (e.g., from file or network)
+
+// TODO: integrate these two methods into one with options
 func (ah *AudioHandler) TranscribeAudioData(ctx context.Context, audioData []byte) (string, error) {
 	if ah.asrService == nil {
 		return "", fmt.Errorf("ASR service not configured")
