@@ -1,25 +1,5 @@
 非常好的思路！**统一应用层**确实是最优雅的跨平台方案。让我为你推荐一些真正跨平台的应用和实现方案：
 
-## 🎯 跨平台应用选型
-
-### **1. 音乐播放器**
-
-| 应用 | 控制方式 | Go 实现难度 | 推荐指数 |
-|------|----------|------------|----------|
-| **VLC** | HTTP API / RC 接口 | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| **Spotify** | Web API | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| **MPV** | JSON IPC | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ |
-| **Audacious** | D-Bus/命令行 | ⭐⭐⭐ | ⭐⭐⭐ |
-
-### **2. 文本编辑器**
-
-| 应用 | 控制方式 | Go 实现难度 | 推荐指数 |
-|------|----------|------------|----------|
-| **VS Code** | Extension API / CLI | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| **Obsidian** | Local REST API | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ |
-| **Typora** | 文件系统 + CLI | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ |
-| **Sublime Text** | Command Palette API | ⭐⭐⭐ | ⭐⭐⭐ |
-
 ---
 
 ## 🚀 推荐方案：VLC + VS Code
@@ -292,7 +272,7 @@ func (a *AppManager) ExecuteScenario(scenario string) error {
 ```go
 module voice-control-pc
 
-go 1.21
+go 1.25.1
 
 require (
     github.com/zmb3/spotify/v2 v2.3.1
@@ -305,7 +285,7 @@ require (
 
 ## ✅ 最终建议
 
-1. **音乐播放：VLC**（免费，API 完善）或 **Spotify**（体验最佳）
+1. **音乐播放：VLC**（免费，API 完善）
 2. **文本编辑：VS Code**（CLI 强大，生态丰富）
 3. **所有控制逻辑用纯 Go 实现**，无需任何平台特定代码
 4. **应用自动启动**：用 Go 检测应用是否运行，未运行则自动启动
