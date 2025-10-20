@@ -41,7 +41,6 @@ type ToolCall struct {
 type Executor interface {
 	RegisterTool(name string, definitions map[string]ToolDefinition) error
 	UnregisterTool(name string) error
-	ToolDefinitions() map[string]map[string]ToolDefinition
 	ToolSchemas() []ToolSchema
 	ExecuteTool(ctx context.Context, call ToolCall) (ToolResult, error)
 }

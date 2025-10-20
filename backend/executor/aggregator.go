@@ -49,24 +49,10 @@ func (e *DefaultExecutor) UnregisterTool(name string) error {
 	return nil
 }
 
-// ToolDefinitions returns the registered tool definitions keyed by tool name.
-func (e *DefaultExecutor) ToolDefinitions() map[string]map[string]ToolDefinition {
-	result := make(map[string]map[string]ToolDefinition, len(e.tools))
-	for name, defs := range e.tools {
-		copy := make(map[string]ToolDefinition, len(defs))
-		for fn, def := range defs {
-			copy[fn] = def
-		}
-		result[name] = copy
-	}
-	return result
-}
-
 // ToolSchemas returns lightweight schema information for LLM registration.
 func (e *DefaultExecutor) ToolSchemas() []ToolSchema {
-	definitions := e.ToolDefinitions()
 	schemas := make([]ToolSchema, 0)
-	for _, defs := range definitions {
+	for _, defs := range e.tools {
 		for _, def := range defs {
 			schemas = append(schemas, ToolSchema{
 				Name:        def.Name,
