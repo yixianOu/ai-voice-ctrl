@@ -24,35 +24,24 @@ type ToolDefinition struct {
 	Executor    ToolExecutor
 }
 
-// ToolSchema exposes metadata required by LLM providers.
+// ToolSchema exposes metadata required by LLM providers。
 type ToolSchema struct {
 	Name        string
 	Description string
 	Parameters  json.RawMessage
 }
 
-// ToolCall represents an invocation request coming from an LLM.
+// ToolCall represents an invocation request coming from an LLM。
 type ToolCall struct {
 	Name      string
 	Arguments json.RawMessage
 }
 
-// ToolRegistry provides tool definitions for a specific application domain.
-type ToolRegistry interface {
-	Tools() map[string]ToolDefinition
-}
-
-// Executor aggregates multiple tool registries and dispatches tool calls.
+// Executor 负责注册/管理工具实例并调度调用。
 type Executor interface {
-	// RegisterRegistry adds a named registry for later lookup.
-	RegisterRegistry(name string, registry ToolRegistry) error
-
-	// ToolDefinitions returns the merged tool definitions keyed by tool name.
-	ToolDefinitions() map[string]ToolDefinition
-
-	// ToolSchemas returns lightweight schemas for LLM registration.
+	RegisterTool(name string, definitions map[string]ToolDefinition) error
+	UnregisterTool(name string) error
+	ToolDefinitions() map[string]map[string]ToolDefinition
 	ToolSchemas() []ToolSchema
-
-	// ExecuteTool dispatches a tool call to the matching registry.
 	ExecuteTool(ctx context.Context, call ToolCall) (ToolResult, error)
 }

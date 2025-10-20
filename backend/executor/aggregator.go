@@ -5,68 +5,87 @@ import (
 	"fmt"
 )
 
-// DefaultExecutor implements the Executor interface and aggregates tool registries.
+// DefaultExecutor 实现 Executor，负责管理工具实例生命周期。
 type DefaultExecutor struct {
-	registries map[string]ToolRegistry
+	tools map[string]map[string]ToolDefinition
 }
 
 // NewDefaultExecutor creates an empty DefaultExecutor instance.
 func NewDefaultExecutor() *DefaultExecutor {
 	return &DefaultExecutor{
-		registries: make(map[string]ToolRegistry),
+		tools: make(map[string]map[string]ToolDefinition),
 	}
 }
 
-// RegisterRegistry adds a ToolRegistry under the given name.
-func (e *DefaultExecutor) RegisterRegistry(name string, registry ToolRegistry) error {
-	if registry == nil {
-		return fmt.Errorf("registry %s is nil", name)
+// RegisterTool registers a tool class and its definitions.
+func (e *DefaultExecutor) RegisterTool(name string, definitions map[string]ToolDefinition) error {
+	if name == "" {
+		return fmt.Errorf("tool name is required")
 	}
 
-	if _, exists := e.registries[name]; exists {
-		return fmt.Errorf("registry %s already registered", name)
+	if len(definitions) == 0 {
+		return fmt.Errorf("tool %s definitions is empty", name)
 	}
 
-	e.registries[name] = registry
+	if _, exists := e.tools[name]; exists {
+		return fmt.Errorf("tool %s already registered", name)
+	}
+
+	copy := make(map[string]ToolDefinition, len(definitions))
+	for fn, def := range definitions {
+		copy[fn] = def
+	}
+
+	e.tools[name] = copy
 	return nil
 }
 
-// ToolDefinitions returns the merged tool definitions from all registries.
-func (e *DefaultExecutor) ToolDefinitions() map[string]ToolDefinition {
-	result := make(map[string]ToolDefinition)
-
-	for _, registry := range e.registries {
-		for name, def := range registry.Tools() {
-			result[name] = def
-		}
+// UnregisterTool removes a tool class.
+func (e *DefaultExecutor) UnregisterTool(name string) error {
+	if _, ok := e.tools[name]; !ok {
+		return fmt.Errorf("tool %s not registered", name)
 	}
+	delete(e.tools, name)
+	return nil
+}
 
+// ToolDefinitions returns the registered tool definitions keyed by tool name.
+func (e *DefaultExecutor) ToolDefinitions() map[string]map[string]ToolDefinition {
+	result := make(map[string]map[string]ToolDefinition, len(e.tools))
+	for name, defs := range e.tools {
+		copy := make(map[string]ToolDefinition, len(defs))
+		for fn, def := range defs {
+			copy[fn] = def
+		}
+		result[name] = copy
+	}
 	return result
 }
 
 // ToolSchemas returns lightweight schema information for LLM registration.
 func (e *DefaultExecutor) ToolSchemas() []ToolSchema {
 	definitions := e.ToolDefinitions()
-	schemas := make([]ToolSchema, 0, len(definitions))
-	for _, def := range definitions {
-		schemas = append(schemas, ToolSchema{
-			Name:        def.Name,
-			Description: def.Description,
-			Parameters:  def.Parameters,
-		})
+	schemas := make([]ToolSchema, 0)
+	for _, defs := range definitions {
+		for _, def := range defs {
+			schemas = append(schemas, ToolSchema{
+				Name:        def.Name,
+				Description: def.Description,
+				Parameters:  def.Parameters,
+			})
+		}
 	}
 	return schemas
 }
 
 // ExecuteTool dispatches a tool call to the matching ToolDefinition.
 func (e *DefaultExecutor) ExecuteTool(ctx context.Context, call ToolCall) (ToolResult, error) {
-	definitions := e.ToolDefinitions()
-	definition, ok := definitions[call.Name]
-	if !ok {
-		return ToolResult{Success: false, Message: "tool not found"}, fmt.Errorf("tool %s not registered", call.Name)
+	for _, defs := range e.tools {
+		if def, ok := defs[call.Name]; ok {
+			return def.Executor(ctx, call.Arguments)
+		}
 	}
-
-	return definition.Executor(ctx, call.Arguments)
+	return ToolResult{Success: false, Message: "tool not found"}, fmt.Errorf("tool %s not registered", call.Name)
 }
 
 var _ Executor = (*DefaultExecutor)(nil)

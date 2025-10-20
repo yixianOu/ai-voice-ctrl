@@ -1,102 +1,182 @@
-# 基于 go-openai 的 Function Calling 示例
+这是一个非常好的架构设计问题！你遇到的是 **有状态工具** 的经典难题。我的建议是：
 
-下面的示例使用社区常用的 `github.com/sashabaranov/go-openai` 库，实现一个完整的工具调用流程：
+---
 
-1. 定义工具 `search_database`；
-2. 将工具清单随对话请求发送给 OpenAI 模型；
-3. 解析模型返回的 `tool_calls` 并执行本地逻辑；
-4. 将工具执行结果再次发送给模型，获取最终回复。
+## **核心建议：会话级状态管理 + 工具实例化模式**
+
+**不要强行保持工具无状态**，因为：
+- VSCode、VLC 等应用本身就是有状态的（打开的文件、播放进度、编辑器状态）
+- 强行用后端存储模拟状态会增加复杂度，且无法处理所有场景（如应用崩溃、用户手动操作）
+
+**推荐方案：** 混合架构 - **会话级实例池 + 状态追踪**
+
+---
+
+## **架构设计方案对比**
+
+### **方案 A：工具对象生命周期管理** ✅ 推荐
 
 ```go
-package main
-
-import (
-        "context"
-        "encoding/json"
-        "fmt"
-        "log"
-
-        openai "github.com/sashabaranov/go-openai"
-)
-
-type toolArgs struct {
-        Query string `json:"query"`
+// 会话中维护工具实例
+type ToolInstance struct {
+    Type        string                 // vscode/vlc/browser
+    State       map[string]interface{} // 当前状态
+    Process     *os.Process            // 关联的进程
+    CreatedAt   time.Time
+    LastUsedAt  time.Time
 }
 
-func main() {
-        client := openai.NewClientFromEnv() // 需提前设置 OPENAI_API_KEY
-        ctx := context.Background()
 
-        tool := openai.Tool{
-                Type: openai.ToolTypeFunction,
-                Function: &openai.FunctionDefinition{
-                        Name:        "search_database",
-                        Description: "搜索数据库中的用户信息",
-                        Parameters: json.RawMessage(`{
-                                "type": "object",
-                                "properties": {
-                                        "query": {
-                                                "type": "string",
-                                                "description": "搜索关键词"
-                                        }
-                                },
-                                "required": ["query"]
-                        }`),
-                },
-        }
-
-        resp, err := client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
-                Model: openai.GPT4oMini,
-                Messages: []openai.ChatCompletionMessage{{
-                        Role:    openai.ChatMessageRoleUser,
-                        Content: "帮我搜索张三",
-                }},
-                Tools: []openai.Tool{tool},
-        })
-        if err != nil {
-                log.Fatalf("调用 OpenAI 失败: %v", err)
-        }
-
-        choice := resp.Choices[0].Message
-        if len(choice.ToolCalls) == 0 {
-                log.Println("模型未调用工具，直接回复:", choice.Content)
-                return
-        }
-
-        call := choice.ToolCalls[0]
-        if call.Function.Name != "search_database" {
-                log.Fatalf("未知工具: %s", call.Function.Name)
-        }
-
-        var args toolArgs
-        if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
-                log.Fatalf("解析参数失败: %v", err)
-        }
-
-        toolResult := searchDatabase(args.Query)
-
-        followResp, err := client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
-                Model: openai.GPT4oMini,
-                Messages: []openai.ChatCompletionMessage{
-                        choice,
-                        {
-                                Role:       openai.ChatMessageRoleTool,
-                                ToolCallID: call.ID,
-                                Content:    toolResult,
-                        },
-                },
-        })
-        if err != nil {
-                log.Fatalf("二次请求失败: %v", err)
-        }
-
-        fmt.Println("最终回复:", followResp.Choices[0].Message.Content)
-}
-
-func searchDatabase(query string) string {
-        // TODO: 替换为真实逻辑
-        return fmt.Sprintf("找到 3 条关于 '%s' 的结果", query)
+// Function Call 调用示例
+func (s *Session) HandleToolCall(call FunctionCall) (string, error) {
+    switch call.Name {
+    case "vscode_open":
+        // 创建新实例或复用
+        workspace := call.Args["workspace"].(string)
+        instance := s.GetOrCreateTool("vscode", workspace)
+        return instance.Open(workspace)
+        
+    case "vscode_edit_file":
+        // 使用当前会话的 vscode 实例
+        instanceID := call.Args["instance_id"].(string)
+        instance := s.Tools[instanceID]
+        return instance.EditFile(call.Args["file"].(string))
+        
+    case "vlc_play":
+        file := call.Args["file"].(string)
+        instance := s.GetOrCreateTool("vlc", file)
+        return instance.Play(file)
+    }
 }
 ```
 
-> 生产环境中建议增加：超时控制、重试策略、日志以及对多次工具调用的循环处理。
+**优点：**
+- ✅ 符合真实应用模型（VSCode 确实需要先打开再操作）
+- ✅ LLM 可以理解"先打开 VSCode，再编辑文件"的流程
+- ✅ 支持同时管理多个应用实例（2 个 VSCode 窗口）
+- ✅ 可以实现垃圾回收（超时自动关闭应用）
+
+**缺点：**
+- 需要维护实例池
+
+---
+
+## **推荐的完整架构**
+
+### **1. 分层设计**
+
+```
+┌─────────────────────────────────────┐
+│   LLM (Function Calling)            │
+│   - 规划操作序列                      │
+│   - 调用工具函数                      │
+└──────────────┬──────────────────────┘
+               │
+┌──────────────▼──────────────────────┐
+│   会话管理层 (Go)                    │
+│   - 维护工具实例池                    │
+│   - 状态追踪与垃圾回收                │
+└──────────────┬──────────────────────┘
+               │
+┌──────────────▼──────────────────────┐
+│   工具适配器层 (Go)                  │
+│   - VSCodeAdapter                   │
+│   - VLCAdapter                      │
+│   - BrowserAdapter                  │
+└──────────────┬──────────────────────┘
+               │
+┌──────────────▼──────────────────────┐
+│   系统调用层                          │
+│   - 进程管理 (exec.Command)          │
+│   - IPC (通过 CLI/API 与应用通信)    │
+└─────────────────────────────────────┘
+```
+
+---
+
+### **2. 具体实现示例**
+
+#### **(1) 工具适配器基类**
+
+```go
+type ToolAdapter interface {
+    Start(config map[string]interface{}) error
+    Execute(action string, params map[string]interface{}) (string, error)
+    GetState() map[string]interface{}
+    IsAlive() bool
+    Shutdown() error
+}
+
+type VSCodeAdapter struct {
+    WorkspacePath string
+    Process       *exec.Cmd
+    CurrentFile   string
+}
+
+func (v *VSCodeAdapter) Start(config map[string]interface{}) error {
+    v.WorkspacePath = config["workspace"].(string)
+    v.Process = exec.Command("code", v.WorkspacePath)
+    return v.Process.Start()
+}
+
+func (v *VSCodeAdapter) Execute(action string, params map[string]interface{}) (string, error) {
+    switch action {
+    case "open_file":
+        file := params["file"].(string)
+        v.CurrentFile = file
+        // 使用 VSCode CLI 打开文件
+        cmd := exec.Command("code", "--goto", file)
+        return cmd.CombinedOutput()
+    case "get_current_file":
+        return v.CurrentFile, nil
+    }
+}
+```
+
+#### **(2) Function Calling 工具定义**
+
+```json
+{
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "vscode_open_workspace",
+        "description": "打开 VSCode 工作区（会创建新的 VSCode 实例）",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "workspace": {
+              "type": "string",
+              "description": "工作区路径"
+            }
+          },
+          "required": ["workspace"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "vscode_edit_file",
+        "description": "在当前 VSCode 实例中编辑文件",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "instance_id": {
+              "type": "string",
+              "description": "VSCode 实例 ID（从 vscode_open_workspace 返回）"
+            },
+            "file": {
+              "type": "string",
+              "description": "文件路径"
+            }
+          },
+          "required": ["instance_id", "file"]
+        }
+      }
+    }
+  ]
+}
+```
+
