@@ -25,14 +25,15 @@ const VoiceControl: React.FC = () => {
   // 停止录音
   const handleStopRecording = async () => {
     try {
-      const result = await StopRecording();
+      const filePath = await StopRecording();
       setIsRecording(false);
-      console.log('录音已停止:', result);
-      
-      // 显示录音文件路径
-      setCommandResult(`录音已保存: ${audioFile}`);
+      setAudioFile(filePath);
+      console.log('录音已停止，文件:', filePath);
+
+      setCommandResult(`录音已保存: ${filePath}`);
     } catch (err) {
       console.error('停止录音失败:', err);
+      setIsRecording(false);
       setError(`停止录音失败: ${err}`);
     }
   };
@@ -94,7 +95,7 @@ const VoiceControl: React.FC = () => {
           <button onClick={() => handleTestCommand('下一首')}>下一首</button>
         </div>
         <p style={{ marginTop: '20px', fontSize: '14px', color: '#666' }}>
-          提示：点击"开始录音"按钮后，会录制5秒音频。录音完成后需要手动实现音频转文字功能。
+          提示：点击"开始录音"按钮后，再点击"停止录音"结束录制。录音文件保存在系统临时目录。
         </p>
       </div>
     </div>

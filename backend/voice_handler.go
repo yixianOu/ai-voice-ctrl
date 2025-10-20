@@ -6,16 +6,10 @@ import (
 )
 
 // VoiceHandler 处理语音命令
-type VoiceHandler struct {
-	audioRecorder *AudioRecorder
-}
+type VoiceHandler struct{ audioRecorder *AudioRecorder }
 
 // NewVoiceHandler 创建语音处理器
-func NewVoiceHandler() *VoiceHandler {
-	return &VoiceHandler{
-		audioRecorder: NewAudioRecorder(),
-	}
-}
+func NewVoiceHandler() *VoiceHandler { return &VoiceHandler{audioRecorder: NewAudioRecorder()} }
 
 // ProcessCommand 处理语音命令
 func (vh *VoiceHandler) ProcessCommand(command string) string {
@@ -25,16 +19,10 @@ func (vh *VoiceHandler) ProcessCommand(command string) string {
 }
 
 // StartRecording 开始录音
-func (vh *VoiceHandler) StartRecording() (string, error) {
-	return vh.audioRecorder.StartRecording()
-}
+func (vh *VoiceHandler) StartRecording() (string, error) { return vh.audioRecorder.StartRecording() }
 
 // StopRecording 停止录音
-func (vh *VoiceHandler) StopRecording() error {
-	return vh.audioRecorder.StopRecording()
-}
+func (vh *VoiceHandler) StopRecording() (string, error) { return vh.audioRecorder.StopRecording() }
 
 // GetRecordingStatus 获取录音状态
-func (vh *VoiceHandler) GetRecordingStatus() string {
-	return vh.audioRecorder.GetRecordingStatus()
-}
+func (vh *VoiceHandler) GetRecordingStatus() string { return vh.audioRecorder.GetRecordingStatus() }
