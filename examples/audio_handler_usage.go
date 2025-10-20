@@ -221,6 +221,8 @@ func Example_VoiceInputFixedDuration() {
 	fmt.Printf("时长: %.2f 秒\n", response.Duration)
 }
 
+/* we don't need to use these examples */
+
 // Example 3: Complete workflow with detailed results
 func Example_CompleteWorkflow() {
 	apiKey := os.Getenv("OPENAI_API_KEY")
