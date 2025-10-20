@@ -1,6 +1,6 @@
 # 基于 Wails + React 的 AI 电脑助手 - Go 后端设计文档
 
-**技术栈：** Go 1.21+ | Wails v2 | React 18 | 通义千问 Qwen-Max
+**技术栈：** Go 1.25.1 | Wails v2 | React 18 | 通义千问 Qwen-Max
 
 ---
 

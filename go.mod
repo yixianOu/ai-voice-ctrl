@@ -2,7 +2,10 @@ module ai-voice-ctrl
 
 go 1.25.1
 
-require github.com/wailsapp/wails/v2 v2.10.2
+require (
+	github.com/gen2brain/malgo v0.11.24
+	github.com/wailsapp/wails/v2 v2.10.2
+)
 
 require (
 	github.com/bep/debounce v1.2.1 // indirect
