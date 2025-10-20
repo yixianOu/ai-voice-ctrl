@@ -1,145 +1,315 @@
-# 🎤 AI 语音控制助手 - 快速开始
+非常好的思路！**统一应用层**确实是最优雅的跨平台方案。让我为你推荐一些真正跨平台的应用和实现方案：
 
-## ⚡ 5 分钟上手
+## 🎯 跨平台应用选型
 
-### 2️⃣ 安装前端依赖
+### **1. 音乐播放器**
 
+| 应用 | 控制方式 | Go 实现难度 | 推荐指数 |
+|------|----------|------------|----------|
+| **VLC** | HTTP API / RC 接口 | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
+| **Spotify** | Web API | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
+| **MPV** | JSON IPC | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ |
+| **Audacious** | D-Bus/命令行 | ⭐⭐⭐ | ⭐⭐⭐ |
+
+### **2. 文本编辑器**
+
+| 应用 | 控制方式 | Go 实现难度 | 推荐指数 |
+|------|----------|------------|----------|
+| **VS Code** | Extension API / CLI | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
+| **Obsidian** | Local REST API | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ |
+| **Typora** | 文件系统 + CLI | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ |
+| **Sublime Text** | Command Palette API | ⭐⭐⭐ | ⭐⭐⭐ |
+
+---
+
+## 🚀 推荐方案：VLC + VS Code
+
+### **方案 A：VLC 音乐控制（HTTP API）**
+
+#### 1. 启用 VLC HTTP 接口
 ```bash
-cd frontend
-pnpm install
+# Windows
+vlc --extraintf http --http-password "yourpassword" --http-port 8080
+
+# Linux
+vlc --extraintf http --http-password "yourpassword" --http-port 8080
 ```
 
-### 3️⃣ 启动应用
+#### 2. Go 实现（完全跨平台）
 
-```bash
-cd ..
-wails dev
-```
-
-## 📂 录音文件说明
-
-- 保存格式：`WAV`（44.1kHz，16-bit，立体声）
-- 保存目录：`/tmp/voice_<时间戳>.wav`
-- 可以使用 `aplay` 或其它播放器试听
-- 录音结束后可将文件传入任意 STT（语音转文本）服务处理
-
----
-综合来看，**`github.com/gen2brain/malgo`** 是最推荐的选择，原因如下：
-
-## 为什么选择 malgo？
-
-### ✅ 优势
-
-1. **零外部依赖** - 基于 miniaudio（单头文件 C 库），编译时自动包含，无需预装任何音频库
-2. **真正跨平台** - Windows/macOS/Linux 开箱即用，只需系统有 C 编译器（Go 默认就有 cgo）
-3. **API 现代简洁** - 接口设计清晰，录音/播放代码都很直观
-4. **活跃维护** - 最近仍在更新，社区支持较好
-5. **性能好** - miniaudio 底层优化良好，延迟低
-
----
-
-## 总结
-
-**直接用 `malgo`** - 对于你的需求（跨平台录音，无需 shell 调用），它是最简单、最可靠的方案。上面的示例代码可直接运行，无需任何额外配置。
-
-需要我帮你创建一个完整的项目示例或解答其他问题吗？
----
-
-# 基于 Wails + React 的 AI 电脑助手 - Go 后端设计文档
-
-**技术栈：** Go 1.25.1 | Wails v2 | React 18 | 通义千问 Qwen-Max
-
----
-
-## 1. 整体架构设计
-
-```
-┌─────────────────────────────────────────────────────────┐
-│              前端层 (React + TypeScript)                 │
-│        聊天界面 | 历史记录 | 状态显示 | 快捷操作          │
-└─────────────────────────────────────────────────────────┘
-                      ↓ Wails Binding
-┌─────────────────────────────────────────────────────────┐
-│                 应用服务层 (app.go)                       │
-│           统一入口 | 会话管理 | 结果聚合                  │
-└─────────────────────────────────────────────────────────┘
-        ↓                ↓                ↓
-┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│  LLM 服务层   │  │  编排服务层   │  │  配置管理层   │
-│  意图理解     │  │  任务拆解     │  │  环境检测     │
-│  参数提取     │  │  执行调度     │  │  API 密钥     │
-└──────────────┘  └──────────────┘  └──────────────┘
-                       ↓
-        ┌──────────────┴──────────────┐
-        ↓                             ↓
-┌──────────────────┐        ┌──────────────────┐
-│   执行器管理器    │        │   上下文管理器    │
-│  注册 | 路由     │        │  会话 | 变量     │
-└──────────────────┘        └──────────────────┘
-        ↓
-┌─────────────────────────────────────────────────────────┐
-│                    执行器层 (Executors)                   │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌─────────┐ │
-│  │系统控制  │  │音乐播放  │  │文件操作  │  │浏览器   │ │
-│  └──────────┘  └──────────┘  └──────────┘  └─────────┘ │
-└─────────────────────────────────────────────────────────┘
-        ↓
-┌─────────────────────────────────────────────────────────┐
-│              系统接口层 (System Interface)                │
-│     D-Bus | Shell Command | OS API | Process Control    │
-└─────────────────────────────────────────────────────────┘
-```
-
----
-
-## 2. Go 项目结构
-
-```
-ai-voice-ctrl/
-├── main.go                          # Wails 应用入口
-├── app.go                           # 应用服务层（前端调用入口）
-├── wails.json                       # Wails 配置
-├── go.mod
-├── go.sum
-│
-├── backend/
-│
-└── frontend/                        # React 前端（Wails 管理）
-    └── src/
-```
-
----
-
-## 3. 核心模块设计
-
-### 3.1 应用服务层 (`app.go`)
-
-**职责：**
-- 作为 Wails 绑定的统一入口
-- 协调各个子系统
-- 管理应用生命周期
-- 聚合返回结果给前端
-
-**核心方法：**
 ```go
-type App struct {
-    ctx          context.Context
-    llm          *llm.Client
-    orchestrator *orchestrator.Manager
-    session      *context.Session
-    config       *config.Config
+package media
+
+import (
+    "encoding/json"
+    "fmt"
+    "net/http"
+    "net/url"
+)
+
+type VLCController struct {
+    Host     string
+    Password string
+    Client   *http.Client
 }
 
-// 前端调用的主方法
-func (a *App) ExecuteCommand(userInput string) *models.ExecuteResult
-func (a *App) GetHistory() []models.Message
-func (a *App) ClearHistory()
-func (a *App) GetSystemStatus() *models.SystemStatus
-func (a *App) SaveConfig(cfg *config.Config) error
+func NewVLCController(host, password string) *VLCController {
+    return &VLCController{
+        Host:     host,
+        Password: password,
+        Client:   &http.Client{},
+    }
+}
+
+// 播放音乐
+func (v *VLCController) PlayMusic(filepath string) error {
+    // VLC HTTP API 添加到播放列表并播放
+    endpoint := fmt.Sprintf("http://:%s@%s/requests/status.json?command=in_play&input=%s",
+        v.Password, v.Host, url.QueryEscape(filepath))
+    
+    resp, err := v.Client.Get(endpoint)
+    if err != nil {
+        return err
+    }
+    defer resp.Body.Close()
+    
+    return nil
+}
+
+// 暂停/恢复
+func (v *VLCController) TogglePause() error {
+    endpoint := fmt.Sprintf("http://:%s@%s/requests/status.json?command=pl_pause",
+        v.Password, v.Host)
+    
+    resp, err := v.Client.Get(endpoint)
+    if err != nil {
+        return err
+    }
+    defer resp.Body.Close()
+    
+    return nil
+}
+
+// 获取当前播放信息
+func (v *VLCController) GetCurrentTrack() (string, error) {
+    endpoint := fmt.Sprintf("http://:%s@%s/requests/status.json",
+        v.Password, v.Host)
+    
+    resp, err := v.Client.Get(endpoint)
+    if err != nil {
+        return "", err
+    }
+    defer resp.Body.Close()
+    
+    var status struct {
+        Information struct {
+            Category struct {
+                Meta struct {
+                    Title  string `json:"title"`
+                    Artist string `json:"artist"`
+                } `json:"meta"`
+            } `json:"category"`
+        } `json:"information"`
+    }
+    
+    if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
+        return "", err
+    }
+    
+    return fmt.Sprintf("%s - %s", 
+        status.Information.Category.Meta.Artist,
+        status.Information.Category.Meta.Title), nil
+}
+
+// 音量控制
+func (v *VLCController) SetVolume(percent int) error {
+    // VLC 音量范围 0-320 (320 = 125%)
+    vlcVolume := int(float64(percent) * 3.2)
+    endpoint := fmt.Sprintf("http://:%s@%s/requests/status.json?command=volume&val=%d",
+        v.Password, v.Host, vlcVolume)
+    
+    _, err := v.Client.Get(endpoint)
+    return err
+}
 ```
 
-**设计要点：**
-- 所有前端调用必须通过这一层
-- 统一错误处理和日志记录
-- 维护全局状态（会话、配置）
-- 返回结构化数据（JSON 友好）
+---
+
+### **方案 B：VS Code 文本编辑（完全跨平台）**
+
+#### 1. Go 实现
+
+```go
+package editor
+
+import (
+    "fmt"
+    "os"
+    "os/exec"
+    "path/filepath"
+)
+
+type VSCodeController struct {
+    WorkspacePath string
+}
+
+func NewVSCodeController(workspace string) *VSCodeController {
+    return &VSCodeController{WorkspacePath: workspace}
+}
+
+// 创建并打开文件
+func (v *VSCodeController) CreateAndOpenFile(filename, content string) error {
+    fullPath := filepath.Join(v.WorkspacePath, filename)
+    
+    // 写入内容
+    if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
+        return err
+    }
+    
+    // 使用 code 命令打开（Windows 和 Linux 都支持）
+    cmd := exec.Command("code", fullPath)
+    return cmd.Run()
+}
+
+// 追加内容到文件
+func (v *VSCodeController) AppendToFile(filename, content string) error {
+    fullPath := filepath.Join(v.WorkspacePath, filename)
+    
+    f, err := os.OpenFile(fullPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+    if err != nil {
+        return err
+    }
+    defer f.Close()
+    
+    _, err = f.WriteString(content + "\n")
+    return err
+}
+
+// 打开现有文件
+func (v *VSCodeController) OpenFile(filename string) error {
+    fullPath := filepath.Join(v.WorkspacePath, filename)
+    cmd := exec.Command("code", fullPath)
+    return cmd.Run()
+}
+
+// 在指定行插入内容
+func (v *VSCodeController) OpenAtLine(filename string, line int) error {
+    fullPath := filepath.Join(v.WorkspacePath, filename)
+    // code 支持 -g 参数跳转到指定行
+    cmd := exec.Command("code", "-g", fmt.Sprintf("%s:%d", fullPath, line))
+    return cmd.Run()
+}
+
+// 使用 code 插件执行复杂操作
+func (v *VSCodeController) ExecuteCommand(command string, args ...string) error {
+    // 通过 VS Code CLI 执行命令
+    cmdArgs := append([]string{"--command", command}, args...)
+    cmd := exec.Command("code", cmdArgs...)
+    return cmd.Run()
+}
+```
+
+---
+
+## 🏗️ 统一控制器架构
+
+```go
+package controller
+
+import "fmt"
+
+// 统一接口
+type MediaPlayer interface {
+    Play(query string) error
+    Pause() error
+    Resume() error
+    GetCurrentTrack() (string, error)
+    SetVolume(percent int) error
+}
+
+type TextEditor interface {
+    CreateFile(filename, content string) error
+    AppendToFile(filename, content string) error
+    OpenFile(filename string) error
+}
+
+// 应用管理器
+type AppManager struct {
+    mediaPlayer MediaPlayer
+    textEditor  TextEditor
+}
+
+func NewAppManager(playerType, editorType string) (*AppManager, error) {
+    var player MediaPlayer
+    var editor TextEditor
+    
+    // 根据配置初始化
+    switch playerType {
+    case "vlc":
+        player = NewVLCController("localhost:8080", "password")
+    case "spotify":
+        player, _ = NewSpotifyController("client_id", "client_secret")
+    default:
+        return nil, fmt.Errorf("unsupported player: %s", playerType)
+    }
+    
+    switch editorType {
+    case "vscode":
+        editor = NewVSCodeController("/home/user/workspace")
+    default:
+        return nil, fmt.Errorf("unsupported editor: %s", editorType)
+    }
+    
+    return &AppManager{
+        mediaPlayer: player,
+        textEditor:  editor,
+    }, nil
+}
+
+// 复杂场景编排
+func (a *AppManager) ExecuteScenario(scenario string) error {
+    switch scenario {
+    case "work_mode":
+        // 播放专注音乐 + 打开工作文档
+        a.mediaPlayer.Play("lo-fi hip hop")
+        a.textEditor.OpenFile("work.md")
+        
+    case "write_article_about_music":
+        // 获取当前音乐信息并写入文章
+        track, _ := a.mediaPlayer.GetCurrentTrack()
+        content := fmt.Sprintf("# 正在听的音乐\n\n当前播放: %s\n\n", track)
+        a.textEditor.CreateFile("music_article.md", content)
+    }
+    
+    return nil
+}
+```
+
+---
+
+## 📦 完整 go.mod
+
+```go
+module voice-control-pc
+
+go 1.21
+
+require (
+    github.com/zmb3/spotify/v2 v2.3.1
+    github.com/sashabaranov/go-openai v1.17.9
+    golang.org/x/oauth2 v0.15.0
+)
+```
+
+---
+
+## ✅ 最终建议
+
+1. **音乐播放：VLC**（免费，API 完善）或 **Spotify**（体验最佳）
+2. **文本编辑：VS Code**（CLI 强大，生态丰富）
+3. **所有控制逻辑用纯 Go 实现**，无需任何平台特定代码
+4. **应用自动启动**：用 Go 检测应用是否运行，未运行则自动启动
+
+这样你的代码在 Windows 和 Linux 上完全一致，只需用户安装相同的跨平台应用即可！
+
+需要我提供完整的项目脚手架代码吗？
