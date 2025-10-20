@@ -24,6 +24,7 @@ type OpenAIASR struct {
 	model  string
 }
 
+// TODO: Integrate into one configuration method
 // NewOpenAIASR creates a new OpenAI ASR service instance
 func NewOpenAIASR(apiKey string) *OpenAIASR {
 	client := openai.NewClient(
@@ -75,6 +76,7 @@ func NewOpenAIASRWithConfig(apiKey string, model string, opts ...option.RequestO
 	}
 }
 
+// TODO: Integrate into one configuration method
 // Transcribe implements ASRService.Transcribe
 func (o *OpenAIASR) Transcribe(ctx context.Context, audioData []byte) (string, error) {
 	if len(audioData) == 0 {
