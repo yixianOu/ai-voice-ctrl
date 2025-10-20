@@ -14,137 +14,116 @@
 
 ---
 
-## **为什么 Function Calling 更快？**
-
 ### 1. **极简实现（Go 示例）**
 ```go
-package main
+// main.gopackage main
 
 import (
-    "encoding/json"
-    "fmt"
-    "io"
-    "net/http"
+        "context""encoding/json""fmt""log""os""os/exec""runtime""github.com/sashabaranov/go-openai"
 )
 
-// 定义工具
-var tools = []map[string]interface{}{
-    {
-        "type": "function",
-        "function": map[string]interface{}{
-            "name":        "search_database",
-            "description": "搜索数据库中的用户信息",
-            "parameters": map[string]interface{}{
-                "type": "object",
-                "properties": map[string]interface{}{
-                    "query": map[string]interface{}{
-                        "type":        "string",
-                        "description": "搜索关键词",
-                    },
-                },
-                "required": []string{"query"},
-            },
-        },
-    },
-}
-
-// 执行工具
-func executeTool(name string, args map[string]interface{}) string {
-    switch name {
-    case "search_database":
-        query := args["query"].(string)
-        // 你的业务逻辑
-        return fmt.Sprintf("找到 3 条关于 '%s' 的结果", query)
-    }
-    return "未知工具"
-}
-
-func main() {
-    http.HandleFunc("/chat", func(w http.ResponseWriter, r *http.Request) {
-        // 1. 第一次请求：告诉 LLM 有哪些工具
-        reqBody := map[string]interface{}{
-            "model": "gpt-4",
-            "messages": []map[string]string{
-                {"role": "user", "content": "帮我搜索张三"},
-            },
-            "tools": tools, // 关键：传入工具定义
+// main 函数是整个程序的入口func main() {
+        // --- 1. 设置 ---
+        apiKey := os.Getenv("OPENAI_API_KEY")
+        if apiKey == "" {
+                log.Fatal("请设置 OPENAI_API_KEY 环境变量")
         }
-        
-        // 2. 调用 OpenAI API（此处省略 HTTP 请求代码）
-        // resp := callOpenAI(reqBody)
-        
-        // 3. 如果 LLM 返回 tool_calls，执行工具
-        // toolResult := executeTool(toolName, toolArgs)
-        
-        // 4. 将结果返回给 LLM（第二次请求）
-        json.NewEncoder(w).Encode(map[string]string{"result": "..."})
-    })
-    
-    http.ListenAndServe(":8080", nil)
+        client := openai.NewClient(apiKey)
+        ctx := context.Background()
+
+        // 用户的自然语言指令
+        userInput := "can you open vscode for me?"// --- 2. 定义我们的工具 (Function Call 的 Go 语言表示) ---// 这部分代码精确地对应了我们第一步设计的 JSON 结构
+        openAppTool := openai.Tool{
+                Type: openai.ToolTypeFunction,
+                Function: &openai.FunctionDefinition{
+                        Name:        "open_application",
+                        Description: "Opens a specified application on the user's computer.",
+                        Parameters:  json.RawMessage(`...`), // 在下方填充
+                },
+        }
+        // 为了代码清晰，将 JSON 参数定义为字符串
+        openAppTool.Function.Parameters = json.RawMessage(`{
+                "type": "object",
+                "properties": {
+                        "app_name": {
+                                "type": "string",
+                                "description": "The name of the application to open, e.g., 'Visual Studio Code', 'Slack'."
+                        }
+                },
+                "required": ["app_name"]
+        }`)
+
+        // --- 3. 调用 LLM，让它进行决策 ---
+        fmt.Println(">> 正在向 OpenAI 发送请求，让它决定使用哪个工具...")
+        resp, err := client.CreateChatCompletion(
+                ctx,
+                openai.ChatCompletionRequest{
+                        Model: openai.GPT4o, // 推荐使用支持工具调用的新模型
+                        Messages: []openai.ChatCompletionMessage{
+                                {
+                                        Role:    openai.ChatMessageRoleUser,
+                                        Content: userInput,
+                                },
+                        },
+                        Tools: []openai.Tool{openAppTool}, // 把我们的工具清单发给 LLM
+                },
+        )
+
+        if err != nil {
+                log.Fatalf("ChatCompletion 错误: %v", err)
+        }
+
+        // --- 4. 解析 LLM 的响应并执行操作 ---
+        message := resp.Choices[0].Message
+        // 检查 LLM 是否决定要调用我们的工具if len(message.ToolCalls) > 0 {
+                toolCall := message.ToolCalls[0]
+                functionName := toolCall.Function.Name
+                fmt.Printf(">> OpenAI 决定调用工具: %s\n", functionName)
+
+                // 使用 switch 来处理不同的工具调用，这使得扩展新功能变得容易switch functionName {
+                case "open_application":
+                        // 解析 LLM 提供的参数var args struct {
+                                AppName string `json:"app_name"`
+                        }
+                        err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args)
+                        if err != nil {
+                                log.Fatalf("解析工具参数失败: %v", err)
+                        }
+                        
+                        // 调用我们自己编写的、安全的执行函数
+                        err = executeOpenApplication(args.AppName)
+                        if err != nil {
+                                fmt.Printf("!! 执行失败: %v\n", err)
+                        } else {
+                                fmt.Printf("✅ 成功执行: 已尝试打开 '%s'\n", args.AppName)
+                        }
+                default:
+                        fmt.Printf("!! 未知的工具: %s\n", functionName)
+                }
+        } else {
+                // 如果 LLM 没调用工具，而是直接回复了文本
+                fmt.Println(">> OpenAI 直接回复:")
+                fmt.Println(message.Content)
+        }
+}
+
+// executeOpenApplication 是真正的“执行层”代码 (MCP 的一部分)// 它负责与操作系统交互，是安全且预先编写好的。func executeOpenApplication(appName string) error {
+        fmt.Printf(">> 正在尝试在系统 (%s) 上打开: %s\n", runtime.GOOS, appName)
+        var cmd *exec.Cmd
+
+        // 为了跨平台兼容性，我们检测当前的操作系统switch runtime.GOOS {
+        case "darwin": // macOS// 在 macOS, 'open -a' 是打开应用的标准方式
+                cmd = exec.Command("open", "-a", appName)
+        case "windows":
+                // 在 Windows, 'start' 命令可以用来启动应用// 注意：这里的 "" 是为了处理应用名称中可能包含空格的情况
+                cmd = exec.Command("cmd", "/C", "start", "", appName)
+        case "linux":
+                // 在 Linux, 我们假设应用的可执行文件在系统的 PATH 中
+                cmd = exec.Command(appName)
+        default:
+                return fmt.Errorf("不支持的操作系统: %s", runtime.GOOS)
+        }
+
+        // 执行命令并返回任何可能发生的错误return cmd.Run()
 }
 ```
-
-### 2. **开发流程对比**
-
-| 步骤 | Function Calling | MCP |
-|------|------------------|-----|
-| 定义工具 | 写 JSON Schema（5 分钟） | 实现 `tools/list` 方法 + 协议层 |
-| 执行工具 | 写普通 Go 函数（10 分钟） | 实现 `tools/call` + 错误处理 |
-| 集成调用方 | 直接调用 LLM API | 实现 stdio/SSE 通信层 |
-| 测试 | curl 测试 HTTP 接口 | 需 MCP Inspector 或自建客户端 |
-
----
-
-## **何时必须用 MCP？**
-
-只有以下场景才需要 MCP：
-
-| 场景 | 原因 |
-|------|------|
-| **需要被多个 AI 应用调用** | MCP 提供标准化接口（Claude Desktop、Zed 编辑器等） |
-| **工具需要动态发现** | MCP 支持运行时查询可用工具 |
-| **需要流式交互** | MCP 支持 Server-Sent Events（SSE） |
-| **官方生态集成** | 使用 Anthropic Claude 的标准工具协议 |
-
-如果你只是：
-- 在自己的应用中调用 LLM
-- 使用 OpenAI/Azure/Anthropic API
-- 不需要被第三方客户端发现
-
-**那么 Function Calling 足够了！**
-
----
-
-## **快速决策树**
-
-```
-你的 Go 服务需要...
-├─ 只给自己的应用用？
-│  └─ ✅ Function Calling（30 分钟搞定）
-│
-├─ 需要被 Claude Desktop/Zed 等工具调用？
-│  └─ 🟡 MCP（2-3 天实现）
-│
-└─ 需要标准化工具协议 + 多客户端？
-   └─ 🟡 MCP（但先评估是否真需要）
-```
-
----
-
-## **推荐方案**
-
-1. **第一阶段（本周）**：用 Function Calling 快速验证
-   - 直接调用 OpenAI/Anthropic API
-   - 工具定义和执行都在你的 Go 代码中
-
-2. **第二阶段（如需要）**：评估是否迁移到 MCP
-   - 如果需要被多个 AI 应用调用
-   - 或者需要动态工具发现
-
----
-
-需要我帮你：
-1. 搜索 Go 的 Function Calling 完整示例？
-2. 或者查找现有的 Go MCP 实现库？
-
-请告诉我你的具体使用场景（是集成到自己的应用，还是提供给其他 AI 工具使用），我可以给出更精准的建议！
