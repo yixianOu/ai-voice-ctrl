@@ -6,30 +6,29 @@
 - 列出平台依赖（CLI、HTTP API、配置文件），确保开发环境已安装并可手动调用。
 
 ## 2. 基础骨架搭建
-- 在 `backend` 中只保留接口定义与调用入口，实际实现下沉至 Node sidecar。
-- 设计 JSON-RPC / HTTP 消息格式，约定命令名称、参数、错误码。
-- 准备 TypeScript 项目脚手架（如 `pnpm init`），创建基础目录结构与共享类型定义。
+- 在 Go 后端定义面向 LLM 的工具接口（函数名称、参数结构、返回值）。
+- 设计 Function Calling 使用的 JSON Schema，确保可被 OpenAI/Anthropic 解析。
+- 预先划分命令类别（播放音乐、编辑文件等），与外部应用操作一一映射。
 
-## 3. Node Sidecar 实现
-- 按应用拆分模块，如 `controllers/vlc.ts`、`controllers/vscode.ts`，封装 CLI/HTTP 调用。
-- 用 TypeScript 编写统一的命令路由器，将来自 Go 的请求分发给具体控制器。
-- 处理参数校验、超时、错误分类，并把结果序列化回传给 Go。
+## 3. 适配函数实现
+- 在 Go 中实现各个工具函数，内部调用现有的外部应用控制逻辑（或 Node sidecar）。
+- 确保函数返回结构化结果或错误信息，方便直接回填到 LLM 对话中。
 
 ## 4. 单元与集成测试
-- 使用 Jest / Vitest 为 TypeScript 控制器编写单元测试，模拟命令执行与错误场景。
-- 提供可选的集成测试脚本（标记 `npm run test:integration`），在本地真实调用外部应用时执行。
-- 实现一个命令行入口（如 `node scripts/drive-command.ts`），便于手工触发 sidecar 指令。
+- 为 Go 工具函数编写单元测试，覆盖参数校验、错误路径、外部调用代理等逻辑。
+- 若有 sidecar，保留其原有测试体系，确保命令执行正确；函数层可使用 mock 验证。
+- 准备一个模拟 LLM 调用的脚本，发送函数调用请求并验证返回结构。
 
 ## 5. 日志与观测
 - 在适配层统一记录执行日志（命令、参数、返回状态），方便后续调试与 LLM 对接。
-- Node 侧输出结构化日志（JSON），Go 侧转储或上报，便于集中分析。
+- 如果仍依赖 sidecar，可输出结构化日志，Go 端记录函数调用链，方便回溯。
 
-## 6. 与 Go 后端对接
-- Go 后端提供 `SidecarClient`，负责管理 Node 进程、心跳与重试。
-- 所有已有的 Go 方法改为调用 `SidecarClient.Call(ctx, command, payload)`，保持向前兼容。
-- 预留 `ExecuteCommand` 统一入口，未来可直接映射到 MCP Handler。
+## 6. LLM 集成
+- 构造 Function Calling 请求：包含用户输入、工具列表（JSON Schema）以及历史上下文。
+- 当 LLM 返回 `tool_calls` 时，调用对应的 Go 函数并把结果作为 `tool` 消息再次发送。
+- 封装一个统一的调度逻辑，管理多轮工具调用、异常重试与用户回显。
 
 ## 7. 联调与回归
-- 使用 Wails 前端 / CLI 脚本调用 Go 后端方法，确认 sidecar 通路正常。
-- 编写回归清单：命令路由、错误回传、外部应用状态变化、重启 sidecar 行为。
-- 在 LLM 调度上线前，用固定 JSON 指令驱动 `SidecarClient` 验证端到端流程。
+- 使用 Wails 前端 / CLI 调用 Go 工具函数，确认本地执行链路正确。
+- 编写回归清单：Schema 更新、函数签名、外部应用状态、LLM 调度重试。
+- 在正式接入 LLM 前，先用假数据模拟 Function Calling 循环，验证端到端流程。
