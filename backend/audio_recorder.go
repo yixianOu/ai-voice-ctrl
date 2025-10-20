@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 
 	"github.com/gen2brain/malgo"
@@ -14,8 +13,6 @@ import (
 
 // AudioRecorder 使用 malgo 进行跨平台录音
 type AudioRecorder struct {
-	mu            sync.Mutex
-	dataMu        sync.Mutex
 	ctx           *malgo.AllocatedContext
 	device        *malgo.Device
 	isRecording   bool
@@ -38,9 +35,6 @@ func NewAudioRecorder() *AudioRecorder {
 
 // StartRecording 开始录音
 func (ar *AudioRecorder) StartRecording() (string, error) {
-	ar.mu.Lock()
-	defer ar.mu.Unlock()
-
 	if ar.isRecording {
 		return "", fmt.Errorf("已经在录音中")
 	}
@@ -49,9 +43,7 @@ func (ar *AudioRecorder) StartRecording() (string, error) {
 		return "", fmt.Errorf("初始化音频上下文失败: %w", err)
 	}
 
-	ar.dataMu.Lock()
 	ar.dataBuffer.Reset()
-	ar.dataMu.Unlock()
 
 	timestamp := time.Now().Format("20060102_150405")
 	filePath := filepath.Join(os.TempDir(), fmt.Sprintf("voice_%s.wav", timestamp))
@@ -66,9 +58,7 @@ func (ar *AudioRecorder) StartRecording() (string, error) {
 			if len(inputSamples) == 0 {
 				return
 			}
-			ar.dataMu.Lock()
 			ar.dataBuffer.Write(inputSamples)
-			ar.dataMu.Unlock()
 		},
 	}
 
@@ -92,9 +82,7 @@ func (ar *AudioRecorder) StartRecording() (string, error) {
 
 // StopRecording 停止录音
 func (ar *AudioRecorder) StopRecording() (string, error) {
-	ar.mu.Lock()
 	if !ar.isRecording || ar.device == nil {
-		ar.mu.Unlock()
 		return "", fmt.Errorf("当前没有在录音")
 	}
 	device := ar.device
@@ -102,7 +90,6 @@ func (ar *AudioRecorder) StopRecording() (string, error) {
 	ar.isRecording = false
 	ar.device = nil
 	ar.currentFile = ""
-	ar.mu.Unlock()
 
 	if err := device.Stop(); err != nil {
 		device.Uninit()
@@ -111,10 +98,8 @@ func (ar *AudioRecorder) StopRecording() (string, error) {
 
 	device.Uninit()
 
-	ar.dataMu.Lock()
 	data := append([]byte(nil), ar.dataBuffer.Bytes()...)
 	ar.dataBuffer.Reset()
-	ar.dataMu.Unlock()
 
 	if len(data) == 0 {
 		return "", fmt.Errorf("未捕获到音频数据")
@@ -124,9 +109,7 @@ func (ar *AudioRecorder) StopRecording() (string, error) {
 		return "", err
 	}
 
-	ar.mu.Lock()
 	ar.lastFile = filePath
-	ar.mu.Unlock()
 
 	return filePath, nil
 }
@@ -144,15 +127,11 @@ func (ar *AudioRecorder) RecordAudio() (string, error) {
 
 // IsRecording 检查是否正在录音
 func (ar *AudioRecorder) IsRecording() bool {
-	ar.mu.Lock()
-	defer ar.mu.Unlock()
 	return ar.isRecording
 }
 
 // GetRecordingStatus 获取录音状态
 func (ar *AudioRecorder) GetRecordingStatus() string {
-	ar.mu.Lock()
-	defer ar.mu.Unlock()
 	if ar.isRecording {
 		return "recording"
 	}
@@ -161,22 +140,16 @@ func (ar *AudioRecorder) GetRecordingStatus() string {
 
 // CurrentFile 获取当前录音文件路径
 func (ar *AudioRecorder) CurrentFile() string {
-	ar.mu.Lock()
-	defer ar.mu.Unlock()
 	return ar.currentFile
 }
 
 // LastFile 返回最近一次录音生成的文件路径
 func (ar *AudioRecorder) LastFile() string {
-	ar.mu.Lock()
-	defer ar.mu.Unlock()
 	return ar.lastFile
 }
 
 // Close 释放底层资源
 func (ar *AudioRecorder) Close() {
-	ar.mu.Lock()
-	defer ar.mu.Unlock()
 	if ar.device != nil {
 		ar.device.Stop()
 		ar.device.Uninit()
