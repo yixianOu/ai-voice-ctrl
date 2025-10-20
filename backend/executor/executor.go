@@ -1,33 +1,58 @@
+// Package executor 提供用于注册和执行工具的通用接口。
 package executor
 
-// Executor is the interface that wraps the basic Execute method.
+import (
+	"context"
+	"encoding/json"
+)
+
+// ToolResult represents the normalized response returned to the LLM.
+type ToolResult struct {
+	Success bool                   `json:"success"`
+	Message string                 `json:"message"`
+	Data    map[string]interface{} `json:"data,omitempty"`
+}
+
+// ToolExecutor is the function signature used by the ToolRegistry.
+type ToolExecutor func(ctx context.Context, payload json.RawMessage) (ToolResult, error)
+
+// ToolDefinition describes a callable tool, including its JSON schema.
+type ToolDefinition struct {
+	Name        string
+	Description string
+	Parameters  json.RawMessage
+	Executor    ToolExecutor
+}
+
+// ToolSchema exposes metadata required by LLM providers.
+type ToolSchema struct {
+	Name        string
+	Description string
+	Parameters  json.RawMessage
+}
+
+// ToolCall represents an invocation request coming from an LLM.
+type ToolCall struct {
+	Name      string
+	Arguments json.RawMessage
+}
+
+// ToolRegistry provides tool definitions for a specific application domain.
+type ToolRegistry interface {
+	Tools() map[string]ToolDefinition
+}
+
+// Executor aggregates multiple tool registries and dispatches tool calls.
 type Executor interface {
-	/* P0 */
-	// Find files, open folders, and open files, read documents, write notes
-	FindFiles(query string) error
-	OpenFolder(path string) error
-	OpenFile(path string) error
-	Read(path string) (string, error)
-	Write(content string) error
+	// RegisterRegistry adds a named registry for later lookup.
+	RegisterRegistry(name string, registry ToolRegistry) error
 
-	// Open, close, and switch applications
-	Open(app string) error
-	Close(app string) error
-	Switch(app string) error
+	// ToolDefinitions returns the merged tool definitions keyed by tool name.
+	ToolDefinitions() map[string]ToolDefinition
 
-	/* P1 */
-	// Play, pause, switch music/video
-	Play() error
-	Pause() error
-	Next() error
-	Previous() error
+	// ToolSchemas returns lightweight schemas for LLM registration.
+	ToolSchemas() []ToolSchema
 
-	/* P2 */
-	// Web browsing and information search
-	SearchInfo(query string) error
-
-	// Dictation, writing emails, writing code snippets
-	Dictate(text string) error
-	WriteEmail(recipient, subject, body string) error
-	WriteCodeSnippet(language, description string) error
+	// ExecuteTool dispatches a tool call to the matching registry.
+	ExecuteTool(ctx context.Context, call ToolCall) (ToolResult, error)
 }

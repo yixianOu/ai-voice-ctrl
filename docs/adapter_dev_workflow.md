@@ -49,3 +49,5 @@
 - **工具注册**：准备 `map[string]ToolDefinition`（含 Schema、描述），在向 LLM 发起请求时填入 `tools` 字段；只暴露需要的函数，控制最小权限面。  
 - **测试**：  
   - 集成测试模拟 LLM 返回 `tool_calls` 的 JSON，验证调度层可以找到函数并返回结果。  
+
+工具的生命周期管理
