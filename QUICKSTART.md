@@ -6,10 +6,6 @@
 
 ```mermaid
 flowchart TB
-    subgraph Speech[语音输入]
-        Mic["麦克风输入"]
-    end
-
     subgraph Wails[Wails 桌面应用]
         subgraph UI[React WebView]
             View["用户界面<br/>- 展示执行结果"]
@@ -35,7 +31,7 @@ flowchart TB
         VSCode["VS Code<br/>CLI"]
     end
 
-    Mic --> Recorder
+    View -->|录音控制| Recorder
     Recorder --> Relay
     Relay --> STT
     STT --> Relay
