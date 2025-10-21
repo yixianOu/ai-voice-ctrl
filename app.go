@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"ai-voice-ctrl/backend/executor"
+	"ai-voice-ctrl/backend/executor/vscode"
 	"ai-voice-ctrl/backend/handler"
 	"ai-voice-ctrl/backend/llms"
 	openaillms "ai-voice-ctrl/backend/llms/openai"
@@ -12,8 +14,11 @@ import (
 
 // App struct
 type App struct {
-	ctx          context.Context
-	audioHandler *handler.AudioHandler
+	ctx            context.Context
+	audioHandler   *handler.AudioHandler
+	commandHandler *handler.CommandHandler
+	executor       executor.Executor
+	agent          llms.Agent
 }
 
 // NewApp creates a new App application struct
@@ -21,8 +26,26 @@ func NewApp() *App {
 	// Get API key from environment variable
 	apiKey := os.Getenv("OPENAI_API_KEY")
 
+	// Initialize executor and register tools
+	exec := executor.NewDefaultExecutor()
+	if err := vscode.RegisterVSCodeLifecycle(exec); err != nil {
+		fmt.Printf("Warning: Failed to register VSCode tools: %v\n", err)
+	}
+
+	// Initialize agent with executor
+	agent := openaillms.NewOpenAIAgent(apiKey, exec)
+
+	// Initialize audio handler
+	audioHandler := handler.NewAudioHandler(apiKey)
+
+	// Initialize command handler
+	commandHandler := handler.NewCommandHandler(audioHandler, agent)
+
 	return &App{
-		audioHandler: handler.NewAudioHandler(apiKey),
+		audioHandler:   audioHandler,
+		commandHandler: commandHandler,
+		executor:       exec,
+		agent:          agent,
 	}
 }
 
@@ -40,9 +63,31 @@ func (a *App) shutdown(ctx context.Context) {
 	}
 }
 
-// Greet returns a greeting for the given name
-func (a *App) Greet(name string) string {
-	return fmt.Sprintf("Hello %s, It's show time!", name)
+// ==================== LLM Command Processing Methods ====================
+
+// ProcessTextCommand processes text command with LLM and tool execution
+func (a *App) ProcessTextCommand(text string) (string, error) {
+	return a.commandHandler.ProcessTextCommand(a.ctx, text)
+}
+
+// ProcessVoiceCommandAuto records audio with VAD, transcribes, and processes with LLM
+func (a *App) ProcessVoiceCommandAuto() (string, error) {
+	return a.commandHandler.ProcessVoiceCommand(a.ctx)
+}
+
+// ResetConversation clears conversation history
+func (a *App) ResetConversation() {
+	a.commandHandler.ResetConversation()
+}
+
+// GetConversationHistory returns conversation history as JSON string
+func (a *App) GetConversationHistory() []llms.Message {
+	return a.commandHandler.GetConversationHistory()
+}
+
+// SetSystemPrompt updates the system prompt for LLM
+func (a *App) SetSystemPrompt(prompt string) {
+	a.commandHandler.SetSystemPrompt(prompt)
 }
 
 // ==================== Audio Recording Methods ====================
@@ -130,11 +175,14 @@ func (a *App) RecordTranscribeAndProcess() (transcription string, result string,
 // ==================== Command Processing Methods ====================
 
 // ProcessVoiceCommand processes voice recognition commands (placeholder)
-// TODO: Will be implemented with LLM integration
+// Deprecated: Use ProcessTextCommand with LLM integration instead
 func (a *App) ProcessVoiceCommand(command string) string {
-	// This is currently a placeholder
-	// Future: Integrate with LLM and function calling
-	return fmt.Sprintf("Command received: '%s' (Processing not yet implemented. Will be integrated with LLM and function calling)", command)
+	return fmt.Sprintf("Command received: '%s' (Use ProcessTextCommand for LLM integration)", command)
+}
+
+// Greet returns a greeting for the given name
+func (a *App) Greet(name string) string {
+	return fmt.Sprintf("Hello %s, It's show time!", name)
 }
 
 // ==================== Status and State Methods ====================
@@ -163,7 +211,34 @@ func (a *App) GetASRServiceName() string {
 
 // SetAPIKey updates the OpenAI API key
 func (a *App) SetAPIKey(apiKey string) {
-	// Create new OpenAI ASR service with new API key
+	// Update ASR service
 	newASR := openaillms.NewOpenAIASR(apiKey)
 	a.audioHandler.SetASRService(newASR)
+
+	// Recreate agent with new API key
+	a.agent = openaillms.NewOpenAIAgent(apiKey, a.executor)
+	a.commandHandler = handler.NewCommandHandler(a.audioHandler, a.agent)
+}
+
+// ==================== Tool Management Methods ====================
+
+// GetAvailableTools returns list of available tools
+func (a *App) GetAvailableTools() []string {
+	schemas := a.executor.ToolSchemas()
+	tools := make([]string, 0, len(schemas))
+	for _, schema := range schemas {
+		tools = append(tools, schema.Name)
+	}
+	return tools
+}
+
+// GetToolDescription returns description for a specific tool
+func (a *App) GetToolDescription(toolName string) string {
+	schemas := a.executor.ToolSchemas()
+	for _, schema := range schemas {
+		if schema.Name == toolName {
+			return schema.Description
+		}
+	}
+	return ""
 }
