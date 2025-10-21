@@ -1,3 +1,4 @@
+// Package vscode tool
 package vscode
 
 import (
@@ -122,7 +123,7 @@ func (t *VSCodeTool) appendFile(ctx context.Context, payload json.RawMessage) (e
 		return executor.ToolResult{Success: false, Message: err.Error()}, err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(resolvedPath), 0o755); err != nil {
+	if err = os.MkdirAll(filepath.Dir(resolvedPath), 0o755); err != nil {
 		return executor.ToolResult{Success: false, Message: "failed to create parent directory"}, fmt.Errorf("create parent directories: %w", err)
 	}
 
