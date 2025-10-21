@@ -4,14 +4,15 @@ go 1.25.1
 
 require (
 	github.com/gen2brain/malgo v0.11.24
-	github.com/go-audio/audio v1.0.0
-	github.com/go-audio/wav v1.1.0
+	github.com/openai/openai-go/v2 v2.7.1
+	github.com/sashabaranov/go-openai v1.41.2
 	github.com/wailsapp/wails/v2 v2.10.2
+	github.com/zmb3/spotify/v2 v2.4.3
+	golang.org/x/oauth2 v0.32.0
 )
 
 require (
 	github.com/bep/debounce v1.2.1 // indirect
-	github.com/go-audio/riff v1.0.0 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
@@ -25,12 +26,10 @@ require (
 	github.com/leaanthony/u v1.1.1 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/openai/openai-go/v2 v2.7.1 // indirect
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/samber/lo v1.49.1 // indirect
-	github.com/sashabaranov/go-openai v1.41.2 // indirect
 	github.com/tidwall/gjson v1.18.0 // indirect
 	github.com/tidwall/match v1.2.0 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
