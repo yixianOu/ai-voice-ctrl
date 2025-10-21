@@ -50,4 +50,5 @@
 - **测试**：  
   - 集成测试模拟 LLM 返回 `tool_calls` 的 JSON，验证调度层可以找到函数并返回结果。  
 
-工具的生命周期管理，code cli功能测试，llm按需创建工具，工具注册的key为type_PID（但是方法是一样的），关闭则对PID发送关闭命令。
+工具的生命周期管理，code cli功能测试，llm按需创建工具，工具注册的key为method_name_PID（但是方法是一样的），关闭则对PID发送关闭命令。要注册到executor的是对象实例？
+llm按需创建工具，能否优雅管理同类工具的多个实例？工具注册的key为method_name_PID，关闭则对PID发送关闭命令。是否可行？实现麻烦吗？llm的function call响应是什么？请帮我修改文档

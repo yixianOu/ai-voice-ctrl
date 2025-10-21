@@ -1,139 +1,26 @@
-这是一个非常好的架构设计问题！你遇到的是 **有状态工具** 的经典难题。我的建议是：
 
----
+## **核心问题：工具实例由llm创建!**
 
-## **核心建议：会话级状态管理 + 工具实例化模式**
-
-**不要强行保持工具无状态**，因为：
-- VSCode、VLC 等应用本身就是有状态的（打开的文件、播放进度、编辑器状态）
-- 强行用后端存储模拟状态会增加复杂度，且无法处理所有场景（如应用崩溃、用户手动操作）
-
-**推荐方案：** 混合架构 - **会话级实例池 + 状态追踪**
-
----
-
-## **架构设计方案对比**
-
-### **方案 A：工具对象生命周期管理** ✅ 推荐
-
+### **模式 B：LLM 按需创建（Lazy Initialization）**
 ```go
-// 会话中维护工具实例
-type ToolInstance struct {
-    Type        string                 // vscode/vlc/browser
-    State       map[string]interface{} // 当前状态
-    Process     *os.Process            // 关联的进程
-    CreatedAt   time.Time
-    LastUsedAt  time.Time
-}
-
-
-// Function Call 调用示例
-func (s *Session) HandleToolCall(call FunctionCall) (string, error) {
+// LLM 决定何时创建工具
+// 用户："帮我打开 VSCode 编辑 main.go"
+// LLM 调用：create_vscode → edit_file
+func (s *Session) HandleFunctionCall(call FunctionCall) {
     switch call.Name {
-    case "vscode_open":
-        // 创建新实例或复用
-        workspace := call.Args["workspace"].(string)
-        instance := s.GetOrCreateTool("vscode", workspace)
-        return instance.Open(workspace)
-        
+    case "create_vscode":
+        s.Tools["vscode"] = createVSCode(call.Args)
     case "vscode_edit_file":
-        // 使用当前会话的 vscode 实例
-        instanceID := call.Args["instance_id"].(string)
-        instance := s.Tools[instanceID]
-        return instance.EditFile(call.Args["file"].(string))
-        
-    case "vlc_play":
-        file := call.Args["file"].(string)
-        instance := s.GetOrCreateTool("vlc", file)
-        return instance.Play(file)
+        s.Tools["vscode"].EditFile(...)
     }
 }
 ```
 
-**优点：**
-- ✅ 符合真实应用模型（VSCode 确实需要先打开再操作）
-- ✅ LLM 可以理解"先打开 VSCode，再编辑文件"的流程
-- ✅ 支持同时管理多个应用实例（2 个 VSCode 窗口）
-- ✅ 可以实现垃圾回收（超时自动关闭应用）
-
-**缺点：**
-- 需要维护实例池
-
 ---
 
-## **推荐的完整架构**
+## **Function Call 工具定义示例**
 
-### **1. 分层设计**
-
-```
-┌─────────────────────────────────────┐
-│   LLM (Function Calling)            │
-│   - 规划操作序列                      │
-│   - 调用工具函数                      │
-└──────────────┬──────────────────────┘
-               │
-┌──────────────▼──────────────────────┐
-│   会话管理层 (Go)                    │
-│   - 维护工具实例池                    │
-│   - 状态追踪与垃圾回收                │
-└──────────────┬──────────────────────┘
-               │
-┌──────────────▼──────────────────────┐
-│   工具适配器层 (Go)                  │
-│   - VSCodeAdapter                   │
-│   - VLCAdapter                      │
-│   - BrowserAdapter                  │
-└──────────────┬──────────────────────┘
-               │
-┌──────────────▼──────────────────────┐
-│   系统调用层                          │
-│   - 进程管理 (exec.Command)          │
-│   - IPC (通过 CLI/API 与应用通信)    │
-└─────────────────────────────────────┘
-```
-
----
-
-### **2. 具体实现示例**
-
-#### **(1) 工具适配器基类**
-
-```go
-type ToolAdapter interface {
-    Start(config map[string]interface{}) error
-    Execute(action string, params map[string]interface{}) (string, error)
-    GetState() map[string]interface{}
-    IsAlive() bool
-    Shutdown() error
-}
-
-type VSCodeAdapter struct {
-    WorkspacePath string
-    Process       *exec.Cmd
-    CurrentFile   string
-}
-
-func (v *VSCodeAdapter) Start(config map[string]interface{}) error {
-    v.WorkspacePath = config["workspace"].(string)
-    v.Process = exec.Command("code", v.WorkspacePath)
-    return v.Process.Start()
-}
-
-func (v *VSCodeAdapter) Execute(action string, params map[string]interface{}) (string, error) {
-    switch action {
-    case "open_file":
-        file := params["file"].(string)
-        v.CurrentFile = file
-        // 使用 VSCode CLI 打开文件
-        cmd := exec.Command("code", "--goto", file)
-        return cmd.CombinedOutput()
-    case "get_current_file":
-        return v.CurrentFile, nil
-    }
-}
-```
-
-#### **(2) Function Calling 工具定义**
+### **方式 1：显式创建 + 操作分离** ✅ 推荐
 
 ```json
 {
@@ -141,15 +28,12 @@ func (v *VSCodeAdapter) Execute(action string, params map[string]interface{}) (s
     {
       "type": "function",
       "function": {
-        "name": "vscode_open_workspace",
-        "description": "打开 VSCode 工作区（会创建新的 VSCode 实例）",
+        "name": "create_vscode",
+        "description": "创建 VSCode 实例（打开工作区）",
         "parameters": {
           "type": "object",
           "properties": {
-            "workspace": {
-              "type": "string",
-              "description": "工作区路径"
-            }
+            "workspace": {"type": "string", "description": "工作区路径"}
           },
           "required": ["workspace"]
         }
@@ -158,25 +42,184 @@ func (v *VSCodeAdapter) Execute(action string, params map[string]interface{}) (s
     {
       "type": "function",
       "function": {
-        "name": "vscode_edit_file",
-        "description": "在当前 VSCode 实例中编辑文件",
+        "name": "vscode_open_file",
+        "description": "在 VSCode 中打开文件（需要先调用 create_vscode）",
         "parameters": {
           "type": "object",
           "properties": {
-            "instance_id": {
-              "type": "string",
-              "description": "VSCode 实例 ID（从 vscode_open_workspace 返回）"
-            },
-            "file": {
-              "type": "string",
-              "description": "文件路径"
-            }
-          },
-          "required": ["instance_id", "file"]
+            "file": {"type": "string", "description": "文件路径"}
+          }
         }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "destroy_vscode",
+        "description": "关闭 VSCode 实例"
       }
     }
   ]
 }
 ```
 
+**LLM 调用流程：**
+```
+用户："帮我用 VSCode 编辑 /code/main.go"
+
+LLM 推理：
+1. 需要先创建 VSCode 实例
+2. 然后打开文件
+
+调用序列：
+→ create_vscode({"workspace": "/code"})
+← "VSCode 已启动"
+→ vscode_open_file({"file": "/code/main.go"})
+← "文件已打开"
+```
+
+---
+
+## **针对你的 Go 客户端 + Function Call 场景的最佳实践**
+
+### **✅ 推荐方案：显式创建 + 状态追踪**
+
+```go
+package main
+
+import (
+    "context"
+    "encoding/json"
+    "fmt"
+)
+
+type DesktopController struct {
+    Registry *ToolRegistry
+    Session  *Session
+}
+
+func (dc *DesktopController) ChatLoop(ctx context.Context) {
+    for {
+        userInput := getUserInput()
+        
+        // 1. 调用 LLM（传递可用工具列表）
+        response := dc.callLLM(userInput, dc.getToolDefinitions())
+        
+        // 2. 处理 tool_calls
+        for _, toolCall := range response.ToolCalls {
+            result, err := dc.handleToolCall(toolCall)
+            
+            // 3. 将结果返回给 LLM
+            dc.sendToolResult(toolCall.ID, result, err)
+        }
+        
+        // 4. 输出最终回复
+        fmt.Println(response.Content)
+    }
+}
+
+func (dc *DesktopController) handleToolCall(call ToolCall) (string, error) {
+    switch call.Function.Name {
+    case "create_vscode":
+        workspace := call.Function.Arguments["workspace"].(string)
+        instance, err := dc.Registry.GetOrCreate("vscode", map[string]interface{}{
+            "workspace": workspace,
+        })
+        if err != nil {
+            return "", err
+        }
+        dc.Session.Tools["vscode"] = instance
+        return fmt.Sprintf("VSCode 已打开工作区: %s", workspace), nil
+        
+    case "vscode_open_file":
+        instance := dc.Session.Tools["vscode"]
+        if instance == nil {
+            return "", fmt.Errorf("VSCode 未启动，请先调用 create_vscode")
+        }
+        
+        file := call.Function.Arguments["file"].(string)
+        return instance.Adapter.Execute("open_file", map[string]interface{}{
+            "file": file,
+        })
+        
+    case "create_vlc":
+        instance, err := dc.Registry.GetOrCreate("vlc", nil)
+        if err != nil {
+            return "", err
+        }
+        dc.Session.Tools["vlc"] = instance
+        return "VLC 已启动", nil
+        
+    case "vlc_play":
+        instance := dc.Session.Tools["vlc"]
+        if instance == nil {
+            return "", fmt.Errorf("VLC 未启动，请先调用 create_vlc")
+        }
+        
+        file := call.Function.Arguments["file"].(string)
+        return instance.Adapter.Execute("play", map[string]interface{}{
+            "file": file,
+        })
+    }
+    
+    return "", fmt.Errorf("unknown tool: %s", call.Function.Name)
+}
+```
+
+---
+
+## **关键设计要点**
+
+### **1. 工具定义中明确依赖关系**
+
+```json
+{
+  "name": "vscode_open_file",
+  "description": "在 VSCode 中打开文件。⚠️ 前置条件：必须先调用 create_vscode 创建实例",
+  "parameters": {...}
+}
+```
+
+### **2. 错误提示要明确**
+
+```go
+if instance == nil {
+    return "", fmt.Errorf(
+        "VSCode 未启动。请先调用 create_vscode 函数创建实例，" +
+        "例如：create_vscode({\"workspace\": \"/path/to/project\"})",
+    )
+}
+```
+
+### **3. 在系统提示词中说明生命周期**
+
+```
+你可以控制桌面应用。使用流程：
+1. 使用 create_<tool> 创建工具实例（如 create_vscode）
+2. 使用 <tool>_<action> 执行操作（如 vscode_open_file）
+3. 使用 destroy_<tool> 关闭工具（可选，系统会自动清理）
+
+示例对话：
+用户："帮我编辑 main.go"
+助手：
+→ create_vscode({"workspace": "/code"})
+→ vscode_open_file({"file": "/code/main.go"})
+```
+
+## **最终建议**
+
+### **对于你的 Go 客户端项目：**
+
+✅ **采用：LLM 按需创建 + 显式生命周期管理**
+
+**原因：**
+1. **资源效率**：不会在启动时打开所有应用
+2. **灵活性**：支持多实例（同时打开 2 个 VSCode）
+3. **LLM 友好**：符合自然语言理解（"先打开，再操作"）
+4. **易于扩展**：新增工具只需注册，无需修改启动逻辑
+
+**实现步骤：**
+1. ✅ 为每个工具定义 `create_*` 和 `*_action` 函数
+2. ✅ 在 `handleToolCall` 中检查实例是否存在
+3. ✅ 错误提示中引导 LLM 先创建实例
+4. ⚠️ 可选：对轻量级工具（clipboard、system_info）用预加载
