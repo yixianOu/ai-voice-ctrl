@@ -1,4 +1,4 @@
-package llms
+package openai
 
 import (
 	"bytes"
@@ -92,7 +92,6 @@ func (o *OpenAIASR) Transcribe(ctx context.Context, audioData []byte) (string, e
 		File:  openai.File(bytes.NewReader(audioData), "audio.wav", "audio/wav"),
 		Model: openai.AudioModel(o.model),
 	})
-
 	if err != nil {
 		return "", o.wrapError(err)
 	}
