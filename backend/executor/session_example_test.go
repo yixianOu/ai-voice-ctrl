@@ -96,22 +96,16 @@ func TestSessionLifecycle(t *testing.T) {
 	}
 
 	go func() {
+		// Phase 1: 前5秒执行多文件写入测试
+		t.Log("Phase 1: Multiple files write test (5 seconds)")
+		phase1Deadline := time.Now().Add(5 * time.Second)
 		fileIndex := 0
-		for {
+
+		for time.Now().Before(phase1Deadline) {
 			fileIndex++
 			fileName := fmt.Sprintf("test_file_%d.md", fileIndex)
 
-			// Test 3.1: vscode_open_file
-			openCall := executor.ToolCall{
-				Name:      "vscode_open_file",
-				Arguments: json.RawMessage(fmt.Sprintf(`{"path": "%s"}`, fileName)),
-			}
-			result, err = exec.ExecuteTool(ctx, openCall)
-			if err != nil {
-				t.Logf("vscode_open_file failed: %v", err)
-			}
-
-			// Test 3.2: vscode_write_file
+			// 写入不同文件
 			writeCall := executor.ToolCall{
 				Name: "vscode_write_file",
 				Arguments: json.RawMessage(fmt.Sprintf(`{
@@ -122,26 +116,76 @@ func TestSessionLifecycle(t *testing.T) {
 			}
 			result, err = exec.ExecuteTool(ctx, writeCall)
 			if err != nil {
-				t.Logf("vscode_write_file failed: %v", err)
+				t.Logf("Phase 1 - Write file %d failed: %v", fileIndex, err)
+			} else {
+				t.Logf("Phase 1 - Completed file %d: %s", fileIndex, fileName)
 			}
 
-			// Test 3.3: vscode_append_file
-			appendCall := executor.ToolCall{
-				Name: "vscode_append_file",
-				Arguments: json.RawMessage(fmt.Sprintf(`{
-			"path": "%s",
-			"content": "\n## Additional Section\n\nAppended content for file %d.\n",
-			"open_in_editor": false
-		}`, fileName, fileIndex)),
-			}
-			result, err = exec.ExecuteTool(ctx, appendCall)
-			if err != nil {
-				t.Logf("vscode_append_file failed: %v", err)
-			}
-
-			t.Logf("Completed operations for file %d: %s", fileIndex, fileName)
 			time.Sleep(300 * time.Millisecond)
 		}
+
+		// Phase 2: 后5秒执行单文件多次写入和修改
+		t.Log("Phase 2: Single file multiple modifications (5 seconds)")
+		phase2Deadline := time.Now().Add(5 * time.Second)
+		singleFileName := "target_file.md"
+		modificationIndex := 0
+
+		// 初始创建文件
+		writeCall := executor.ToolCall{
+			Name: "vscode_write_file",
+			Arguments: json.RawMessage(fmt.Sprintf(`{
+			"path": "%s",
+			"content": "# Target File\n\nInitial content created at: %s\n\n",
+			"open_in_editor": true
+		}`, singleFileName, time.Now().Format(time.RFC3339))),
+		}
+		result, err = exec.ExecuteTool(ctx, writeCall)
+		if err != nil {
+			t.Logf("Phase 2 - Initial write failed: %v", err)
+		}
+
+		for time.Now().Before(phase2Deadline) {
+			modificationIndex++
+
+			// 交替执行写入和追加
+			if modificationIndex%2 == 0 {
+				// 重写文件
+				writeCall := executor.ToolCall{
+					Name: "vscode_write_file",
+					Arguments: json.RawMessage(fmt.Sprintf(`{
+			"path": "%s",
+			"content": "# Target File\n\nRewritten at: %s\n\n## Modification %d\n\nThis is rewrite number %d.\n",
+			"open_in_editor": true
+		}`, singleFileName, time.Now().Format(time.RFC3339), modificationIndex, modificationIndex)),
+				}
+				result, err = exec.ExecuteTool(ctx, writeCall)
+				if err != nil {
+					t.Logf("Phase 2 - Rewrite %d failed: %v", modificationIndex, err)
+				} else {
+					t.Logf("Phase 2 - Rewrite %d completed", modificationIndex)
+				}
+			} else {
+				// 追加内容
+				appendCall := executor.ToolCall{
+					Name: "vscode_append_file",
+					Arguments: json.RawMessage(fmt.Sprintf(`{
+			"path": "%s",
+			"content": "\n### Append %d\n\nAppended at: %s\n",
+			"open_in_editor": false
+		}`, singleFileName, modificationIndex, time.Now().Format(time.RFC3339))),
+				}
+				result, err = exec.ExecuteTool(ctx, appendCall)
+				if err != nil {
+					t.Logf("Phase 2 - Append %d failed: %v", modificationIndex, err)
+				} else {
+					t.Logf("Phase 2 - Append %d completed", modificationIndex)
+				}
+			}
+
+			time.Sleep(300 * time.Millisecond)
+		}
+
+		t.Logf("Test completed: Phase 1 created %d files, Phase 2 made %d modifications", fileIndex, modificationIndex)
 	}()
 
 	<-time.After(10 * time.Second)
