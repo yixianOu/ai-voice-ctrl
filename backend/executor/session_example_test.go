@@ -23,7 +23,7 @@ func ExampleRegisterVSCodeLifecycle() {
 	// 3. Simulate LLM calling create_vscode
 	createCall := executor.ToolCall{
 		Name:      "create_vscode",
-		Arguments: json.RawMessage(`{"workspace": "/tmp/test"}`),
+		Arguments: json.RawMessage(`{"workspace": "/home/orician/workspace/doc"}`),
 	}
 	result, err := exec.ExecuteTool(context.Background(), createCall)
 	if err != nil {

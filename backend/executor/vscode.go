@@ -205,7 +205,6 @@ func (t *VSCodeTool) resolvePath(input string) (string, error) {
 
 func (t *VSCodeTool) runVSCodeCommand(ctx context.Context, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, t.codePath, args...)
-	cmd.Dir = t.workspace
 	cmd.Env = os.Environ()
 	output, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(output)), err
@@ -358,10 +357,15 @@ func (t *VSCodeTool) createVSCodeExecutor(exec Executor) ToolExecutor {
 			return ToolResult{Success: false, Message: err.Error()}, err
 		}
 
+		ctx = ensureContext(ctx)
+		if _, err := tool.runVSCodeCommand(ctx, tool.workspace); err != nil {
+			return ToolResult{Success: false, Message: "failed to open workspace"}, fmt.Errorf("open workspace: %w", err)
+		}
+
 		exec.StoreInstance("vscode", tool)
 		return ToolResult{
 			Success: true,
-			Message: "VSCode instance created",
+			Message: "VSCode instance created and workspace opened",
 			Data:    map[string]interface{}{"workspace": args.Workspace},
 		}, nil
 	}
