@@ -6,6 +6,8 @@ import (
 	"os"
 
 	"ai-voice-ctrl/backend/executor"
+	"ai-voice-ctrl/backend/executor/browser"
+	"ai-voice-ctrl/backend/executor/spotify"
 	"ai-voice-ctrl/backend/executor/vscode"
 	"ai-voice-ctrl/backend/handler"
 	"ai-voice-ctrl/backend/llms"
@@ -30,6 +32,12 @@ func NewApp() *App {
 	exec := executor.NewDefaultExecutor()
 	if err := vscode.RegisterVSCodeLifecycle(exec); err != nil {
 		fmt.Printf("Warning: Failed to register VSCode tools: %v\n", err)
+	}
+	if err := spotify.RegisterSpotifyTool(exec); err != nil {
+		fmt.Printf("Warning: Failed to register Spotify tools: %v\n", err)
+	}
+	if err := browser.RegisterBrowserTool(exec); err != nil {
+		fmt.Printf("Warning: Failed to register Browser tools: %v\n", err)
 	}
 
 	// Initialize agent with executor
@@ -66,9 +74,9 @@ func (a *App) shutdown(ctx context.Context) {
 // ==================== LLM Command Processing Methods ====================
 
 // ProcessTextCommand processes text command with LLM and tool execution
-func (a *App) ProcessTextCommand(text string) (string, error) {
-	return a.commandHandler.ProcessTextCommand(a.ctx, text)
-}
+// func (a *App) ProcessTextCommand(text string) (string, error) {
+// 	return a.commandHandler.ProcessTextCommand(a.ctx, text)
+// }
 
 // ProcessVoiceCommandAuto records audio with VAD, transcribes, and processes with LLM
 func (a *App) ProcessVoiceCommandAuto() (string, error) {
@@ -86,9 +94,9 @@ func (a *App) GetConversationHistory() []llms.Message {
 }
 
 // SetSystemPrompt updates the system prompt for LLM
-func (a *App) SetSystemPrompt(prompt string) {
-	a.commandHandler.SetSystemPrompt(prompt)
-}
+// func (a *App) SetSystemPrompt(prompt string) {
+// 	a.commandHandler.SetSystemPrompt(prompt)
+// }
 
 // ==================== Audio Recording Methods ====================
 
@@ -133,44 +141,44 @@ func (a *App) RecordAndTranscribeWithLanguage(language string) (string, error) {
 }
 
 // TranscribeAudioData transcribes pre-recorded audio data
-func (a *App) TranscribeAudioData(audioData []byte) (string, error) {
-	return a.audioHandler.TranscribeAudioData(a.ctx, audioData)
-}
+// func (a *App) TranscribeAudioData(audioData []byte) (string, error) {
+// 	return a.audioHandler.TranscribeAudioData(a.ctx, audioData)
+// }
 
 // ==================== Complete Workflow Methods ====================
 
 // ExecuteVoiceCommandWorkflow executes complete voice command workflow
 // Returns: transcript, commandResult, error
-func (a *App) ExecuteVoiceCommandWorkflow() (string, string, error) {
-	workflow, err := a.audioHandler.ExecuteVoiceCommandWorkflow(a.ctx)
-	if err != nil {
-		return "", "", err
-	}
-	return workflow.Transcript, workflow.CommandResult, nil
-}
+// func (a *App) ExecuteVoiceCommandWorkflow() (string, string, error) {
+// 	workflow, err := a.audioHandler.ExecuteVoiceCommandWorkflow(a.ctx)
+// 	if err != nil {
+// 		return "", "", err
+// 	}
+// 	return workflow.Transcript, workflow.CommandResult, nil
+// }
 
 // ExecuteVoiceCommandWorkflowWithLanguage executes workflow with language specification
-func (a *App) ExecuteVoiceCommandWorkflowWithLanguage(language string) (string, string, error) {
-	opts := llms.TranscribeOptions{
-		Language: language,
-	}
-	workflow, err := a.audioHandler.ExecuteVoiceCommandWorkflowWithOptions(a.ctx, opts)
-	if err != nil {
-		return "", "", err
-	}
-	return workflow.Transcript, workflow.CommandResult, nil
-}
+// func (a *App) ExecuteVoiceCommandWorkflowWithLanguage(language string) (string, string, error) {
+// 	opts := llms.TranscribeOptions{
+// 		Language: language,
+// 	}
+// 	workflow, err := a.audioHandler.ExecuteVoiceCommandWorkflowWithOptions(a.ctx, opts)
+// 	if err != nil {
+// 		return "", "", err
+// 	}
+// 	return workflow.Transcript, workflow.CommandResult, nil
+// }
 
 // RecordTranscribeAndProcess records, transcribes, and processes the command
 // Legacy method - kept for backward compatibility
 // Deprecated: Use ExecuteVoiceCommandWorkflow instead
-func (a *App) RecordTranscribeAndProcess() (transcription string, result string, err error) {
-	workflow, err := a.audioHandler.ExecuteVoiceCommandWorkflow(a.ctx)
-	if err != nil {
-		return "", "", err
-	}
-	return workflow.Transcript, workflow.CommandResult, nil
-}
+// func (a *App) RecordTranscribeAndProcess() (transcription string, result string, err error) {
+// 	workflow, err := a.audioHandler.ExecuteVoiceCommandWorkflow(a.ctx)
+// 	if err != nil {
+// 		return "", "", err
+// 	}
+// 	return workflow.Transcript, workflow.CommandResult, nil
+// }
 
 // ==================== Command Processing Methods ====================
 
@@ -180,17 +188,12 @@ func (a *App) ProcessVoiceCommand(command string) string {
 	return fmt.Sprintf("Command received: '%s' (Use ProcessTextCommand for LLM integration)", command)
 }
 
-// Greet returns a greeting for the given name
-func (a *App) Greet(name string) string {
-	return fmt.Sprintf("Hello %s, It's show time!", name)
-}
-
 // ==================== Status and State Methods ====================
 
 // GetRecordingStatus gets current recording status
-func (a *App) GetRecordingStatus() string {
-	return a.audioHandler.GetRecordingStatus()
-}
+// func (a *App) GetRecordingStatus() string {
+// 	return a.audioHandler.GetRecordingStatus()
+// }
 
 // IsRecording checks if currently recording
 func (a *App) IsRecording() bool {
@@ -203,9 +206,9 @@ func (a *App) GetLastTranscript() string {
 }
 
 // GetASRServiceName returns the name of current ASR service
-func (a *App) GetASRServiceName() string {
-	return a.audioHandler.GetASRServiceName()
-}
+// func (a *App) GetASRServiceName() string {
+// 	return a.audioHandler.GetASRServiceName()
+// }
 
 // ==================== Configuration Methods ====================
 
