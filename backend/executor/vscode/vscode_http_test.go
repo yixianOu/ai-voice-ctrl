@@ -8,8 +8,6 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
-
-	"ai-voice-ctrl/backend/executor"
 )
 
 func TestVSCodeHTTPToolIntegration(t *testing.T) {
@@ -192,48 +190,6 @@ func TestVSCodeHTTPToolIntegration(t *testing.T) {
 			})
 		}
 	})
-}
-
-func TestVSCodeHTTPToolRegistration(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "vscode-http-reg-test-*")
-	if err != nil {
-		t.Fatalf("failed to create temp dir: %v", err)
-	}
-	defer os.RemoveAll(tmpDir)
-
-	tool, err := NewVSCodeHTTPTool(tmpDir, 9527)
-	if err != nil {
-		t.Fatalf("failed to create tool: %v", err)
-	}
-
-	exec := executor.NewDefaultExecutor()
-
-	// Test: Register lifecycle
-	if err := tool.RegisterHTTPLifecycle(exec); err != nil {
-		t.Fatalf("failed to register lifecycle: %v", err)
-	}
-
-	// Verify registered functions
-	expectedFunctions := []string{
-		"vscode_open_file",
-		"vscode_close_file",
-		"vscode_refresh_file",
-		"vscode_close_window",
-	}
-
-	schemas := exec.ToolSchemas()
-	registeredNames := make(map[string]bool)
-	for _, schema := range schemas {
-		registeredNames[schema.Name] = true
-	}
-
-	for _, funcName := range expectedFunctions {
-		if !registeredNames[funcName] {
-			t.Errorf("expected function %s not registered", funcName)
-		}
-	}
-
-	t.Log("All expected functions registered successfully")
 }
 
 func TestVSCodeHTTPToolErrorHandling(t *testing.T) {

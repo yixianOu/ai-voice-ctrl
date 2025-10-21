@@ -1,4 +1,4 @@
-package executor_test
+package vscode
 
 import (
 	"context"
@@ -8,62 +8,13 @@ import (
 	"time"
 
 	"ai-voice-ctrl/backend/executor"
-	"ai-voice-ctrl/backend/executor/vscode"
 )
-
-// Example demonstrates LLM-driven tool lifecycle management.
-func ExampleRegisterVSCodeLifecycle() {
-	// 1. Create executor
-	exec := executor.NewDefaultExecutor()
-
-	// 2. Register VSCode with lifecycle functions
-	if err := vscode.RegisterVSCodeLifecycle(exec); err != nil {
-		fmt.Printf("Registration failed: %v\n", err)
-		return
-	}
-
-	// 3. Simulate LLM calling create_vscode
-	createCall := executor.ToolCall{
-		Name:      "create_vscode",
-		Arguments: json.RawMessage(`{"workspace": "$string"}`),
-	}
-	result, err := exec.ExecuteTool(context.Background(), createCall)
-	if err != nil {
-		fmt.Printf("Create failed: %v\n", err)
-		return
-	}
-	fmt.Printf("Create result: %s\n", result.Message)
-
-	// 4. Simulate LLM calling vscode_open_file
-	openCall := executor.ToolCall{
-		Name:      "vscode_open_file",
-		Arguments: json.RawMessage(`{"path": "main.go", "line": 10}`),
-	}
-	result, err = exec.ExecuteTool(context.Background(), openCall)
-	if err != nil {
-		fmt.Printf("Open failed: %v\n", err)
-		return
-	}
-	fmt.Printf("Open result: %s\n", result.Message)
-
-	// 5. Simulate LLM calling destroy_vscode
-	destroyCall := executor.ToolCall{
-		Name:      "destroy_vscode",
-		Arguments: json.RawMessage(`{}`),
-	}
-	result, err = exec.ExecuteTool(context.Background(), destroyCall)
-	if err != nil {
-		fmt.Printf("Destroy failed: %v\n", err)
-		return
-	}
-	fmt.Printf("Destroy result: %s\n", result.Message)
-}
 
 // TestSessionLifecycle tests the full lifecycle of tool instance management.
 func TestSessionLifecycle(t *testing.T) {
 	exec := executor.NewDefaultExecutor()
 
-	if err := vscode.RegisterVSCodeLifecycle(exec); err != nil {
+	if err := RegisterVSCodeLifecycle(exec); err != nil {
 		t.Fatalf("RegisterVSCodeLifecycle failed: %v", err)
 	}
 
