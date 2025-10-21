@@ -1,150 +1,172 @@
-根据你的需求"使用 Go 快速实现"，我建议：
 
----
+## **核心问题：工具实例由 LLM 创建**
 
-## **结论：优先用 Function Calling，而非 MCP**
+### **已实现：Executor 内置实例管理**
 
-| 维度 | **Function Calling** ✅ | **MCP** |
-|------|------------------------|---------|
-| **实现复杂度** | 极低（只需返回 JSON Schema + 执行函数） | 中等（需实现完整 JSON-RPC 2.0 协议） |
-| **开发时间** | 30 分钟 - 2 小时 | 2-5 天 |
-| **Go 生态支持** | 原生支持（任何 HTTP 库即可） | 需自建或找第三方库 |
-| **调试难度** | 简单（直接 HTTP 调试） | 复杂（需处理 stdio/SSE 协议层） |
-| **适用场景** | 直接与 LLM API 集成（OpenAI/Anthropic/Azure） | 需要标准化工具接口、多客户端共享 |
+参见 `backend/executor/session.go` 和 `backend/executor/SESSION_USAGE.md`。
 
----
+核心设计：
+- `DefaultExecutor` 内置 `instances sync.Map` 管理工具实例
+- 每个工具包含 `create_*`、`*_action`、`destroy_*` 函数
+- LLM 通过 `create_*` 触发实例化，通过 `*_action` 执行操作
 
-## **为什么 Function Calling 更快？**
-
-### 1. **极简实现（Go 示例）**
 ```go
-package main
+// 使用示例
+exec := executor.NewDefaultExecutor()
+executor.RegisterVSCodeLifecycle(exec)
 
-import (
-    "encoding/json"
-    "fmt"
-    "io"
-    "net/http"
-)
+// LLM 调用流程：
+// 1. create_vscode({workspace: "/code"})
+// 2. vscode_open_file({path: "main.go"})
+// 3. destroy_vscode({})
+```
 
-// 定义工具
-var tools = []map[string]interface{}{
+---
+
+## **Function Call 工具定义示例**
+
+### **方式 1：显式创建 + 操作分离** ✅ 推荐
+
+```json
+{
+  "tools": [
     {
-        "type": "function",
-        "function": map[string]interface{}{
-            "name":        "search_database",
-            "description": "搜索数据库中的用户信息",
-            "parameters": map[string]interface{}{
-                "type": "object",
-                "properties": map[string]interface{}{
-                    "query": map[string]interface{}{
-                        "type":        "string",
-                        "description": "搜索关键词",
-                    },
-                },
-                "required": []string{"query"},
-            },
-        },
-    },
-}
-
-// 执行工具
-func executeTool(name string, args map[string]interface{}) string {
-    switch name {
-    case "search_database":
-        query := args["query"].(string)
-        // 你的业务逻辑
-        return fmt.Sprintf("找到 3 条关于 '%s' 的结果", query)
-    }
-    return "未知工具"
-}
-
-func main() {
-    http.HandleFunc("/chat", func(w http.ResponseWriter, r *http.Request) {
-        // 1. 第一次请求：告诉 LLM 有哪些工具
-        reqBody := map[string]interface{}{
-            "model": "gpt-4",
-            "messages": []map[string]string{
-                {"role": "user", "content": "帮我搜索张三"},
-            },
-            "tools": tools, // 关键：传入工具定义
+      "type": "function",
+      "function": {
+        "name": "create_vscode",
+        "description": "创建 VSCode 实例（打开工作区）",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "workspace": {"type": "string", "description": "工作区路径"}
+          },
+          "required": ["workspace"]
         }
-        
-        // 2. 调用 OpenAI API（此处省略 HTTP 请求代码）
-        // resp := callOpenAI(reqBody)
-        
-        // 3. 如果 LLM 返回 tool_calls，执行工具
-        // toolResult := executeTool(toolName, toolArgs)
-        
-        // 4. 将结果返回给 LLM（第二次请求）
-        json.NewEncoder(w).Encode(map[string]string{"result": "..."})
-    })
-    
-    http.ListenAndServe(":8080", nil)
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "vscode_open_file",
+        "description": "在 VSCode 中打开文件（需要先调用 create_vscode）",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "file": {"type": "string", "description": "文件路径"}
+          }
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "destroy_vscode",
+        "description": "关闭 VSCode 实例"
+      }
+    }
+  ]
 }
 ```
 
-### 2. **开发流程对比**
-
-| 步骤 | Function Calling | MCP |
-|------|------------------|-----|
-| 定义工具 | 写 JSON Schema（5 分钟） | 实现 `tools/list` 方法 + 协议层 |
-| 执行工具 | 写普通 Go 函数（10 分钟） | 实现 `tools/call` + 错误处理 |
-| 集成调用方 | 直接调用 LLM API | 实现 stdio/SSE 通信层 |
-| 测试 | curl 测试 HTTP 接口 | 需 MCP Inspector 或自建客户端 |
-
----
-
-## **何时必须用 MCP？**
-
-只有以下场景才需要 MCP：
-
-| 场景 | 原因 |
-|------|------|
-| **需要被多个 AI 应用调用** | MCP 提供标准化接口（Claude Desktop、Zed 编辑器等） |
-| **工具需要动态发现** | MCP 支持运行时查询可用工具 |
-| **需要流式交互** | MCP 支持 Server-Sent Events（SSE） |
-| **官方生态集成** | 使用 Anthropic Claude 的标准工具协议 |
-
-如果你只是：
-- 在自己的应用中调用 LLM
-- 使用 OpenAI/Azure/Anthropic API
-- 不需要被第三方客户端发现
-
-**那么 Function Calling 足够了！**
-
----
-
-## **快速决策树**
-
+**LLM 调用流程：**
 ```
-你的 Go 服务需要...
-├─ 只给自己的应用用？
-│  └─ ✅ Function Calling（30 分钟搞定）
-│
-├─ 需要被 Claude Desktop/Zed 等工具调用？
-│  └─ 🟡 MCP（2-3 天实现）
-│
-└─ 需要标准化工具协议 + 多客户端？
-   └─ 🟡 MCP（但先评估是否真需要）
+用户："帮我用 VSCode 编辑 /code/main.go"
+
+LLM 推理：
+1. 需要先创建 VSCode 实例
+2. 然后打开文件
+
+调用序列：
+→ create_vscode({"workspace": "/code"})
+← "VSCode 已启动"
+→ vscode_open_file({"file": "/code/main.go"})
+← "文件已打开"
 ```
 
 ---
 
-## **推荐方案**
+## **针对你的 Go 客户端 + Function Call 场景的最佳实践**
 
-1. **第一阶段（本周）**：用 Function Calling 快速验证
-   - 直接调用 OpenAI/Anthropic API
-   - 工具定义和执行都在你的 Go 代码中
+### **✅ 已实现方案：Executor 内置实例管理**
 
-2. **第二阶段（如需要）**：评估是否迁移到 MCP
-   - 如果需要被多个 AI 应用调用
-   - 或者需要动态工具发现
+详见 `backend/executor/SESSION_USAGE.md`。
+
+核心实现：
+```go
+type DefaultExecutor struct {
+    tools     map[string]map[string]ToolDefinition
+    instances sync.Map // 工具实例缓存
+}
+
+func RegisterVSCodeLifecycle(exec Executor) error {
+    // 注册 create_vscode, vscode_*, destroy_vscode
+}
+```
+
+**使用流程**：
+```go
+exec := executor.NewDefaultExecutor()
+executor.RegisterVSCodeLifecycle(exec)
+
+// LLM 调用：
+// → create_vscode({workspace: "/code"})
+// → vscode_open_file({path: "main.go"})
+```
 
 ---
 
-需要我帮你：
-1. 搜索 Go 的 Function Calling 完整示例？
-2. 或者查找现有的 Go MCP 实现库？
+## **关键设计要点**
 
-请告诉我你的具体使用场景（是集成到自己的应用，还是提供给其他 AI 工具使用），我可以给出更精准的建议！
+### **1. 工具定义中明确依赖关系**
+
+```json
+{
+  "name": "vscode_open_file",
+  "description": "在 VSCode 中打开文件。⚠️ 前置条件：必须先调用 create_vscode 创建实例",
+  "parameters": {...}
+}
+```
+
+### **2. 错误提示要明确**
+
+```go
+if instance == nil {
+    return "", fmt.Errorf(
+        "VSCode 未启动。请先调用 create_vscode 函数创建实例，" +
+        "例如：create_vscode({\"workspace\": \"/path/to/project\"})",
+    )
+}
+```
+
+### **3. 在系统提示词中说明生命周期**
+
+```
+你可以控制桌面应用。使用流程：
+1. 使用 create_<tool> 创建工具实例（如 create_vscode）
+2. 使用 <tool>_<action> 执行操作（如 vscode_open_file）
+3. 使用 destroy_<tool> 关闭工具（可选，系统会自动清理）
+
+示例对话：
+用户："帮我编辑 main.go"
+助手：
+→ create_vscode({"workspace": "/code"})
+→ vscode_open_file({"file": "/code/main.go"})
+```
+
+## **最终建议**
+
+### **对于你的 Go 客户端项目：**
+
+✅ **采用：LLM 按需创建 + 显式生命周期管理**
+
+**原因：**
+1. **资源效率**：不会在启动时打开所有应用
+2. **灵活性**：支持多实例（同时打开 2 个 VSCode）
+3. **LLM 友好**：符合自然语言理解（"先打开，再操作"）
+4. **易于扩展**：新增工具只需注册，无需修改启动逻辑
+
+**实现步骤：**
+1. ✅ 为每个工具定义 `create_*` 和 `*_action` 函数
+2. ✅ 在 `handleToolCall` 中检查实例是否存在
+3. ✅ 错误提示中引导 LLM 先创建实例
+4. ⚠️ 可选：对轻量级工具（clipboard、system_info）用预加载
