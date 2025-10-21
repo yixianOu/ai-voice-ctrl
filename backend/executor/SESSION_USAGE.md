@@ -4,6 +4,11 @@
 
 `Executor` 内置工具实例管理，支持 LLM 驱动的生命周期控制。工具实例由模型调用 `create_*` 函数动态创建。
 
+backend/executor/executor.go: 类型定义，接口定义
+backend/executor/aggregator.go: 单例模式，工具控制器
+backend/executor/vscode.go: VSCode 具体工具生命周期实现
+backend/executor/session_example_test.go: 使用示例代码和单元测试
+
 ## 核心概念
 
 ### 1. 工具生命周期
