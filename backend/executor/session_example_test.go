@@ -23,7 +23,7 @@ func ExampleRegisterVSCodeLifecycle() {
 	// 3. Simulate LLM calling create_vscode
 	createCall := executor.ToolCall{
 		Name:      "create_vscode",
-		Arguments: json.RawMessage(`{"workspace": "/home/orician/workspace/doc"}`),
+		Arguments: json.RawMessage(`{"workspace": "$string"}`),
 	}
 	result, err := exec.ExecuteTool(context.Background(), createCall)
 	if err != nil {
@@ -83,7 +83,7 @@ func TestSessionLifecycle(t *testing.T) {
 	// Test 2: Create VSCode instance with current directory
 	createCall := executor.ToolCall{
 		Name:      "create_vscode",
-		Arguments: json.RawMessage(`{"workspace": "."}`),
+		Arguments: json.RawMessage(`{"workspace": "/home/orician/workspace/doc"}`),
 	}
 	result, err = exec.ExecuteTool(ctx, createCall)
 	if err != nil {
@@ -93,12 +93,16 @@ func TestSessionLifecycle(t *testing.T) {
 		t.Error("create_vscode should succeed")
 	}
 
-	// Test 3: Now vscode_open_file should work (but may fail if code CLI not available)
+	// Test 3.1: Now vscode_open_file should work (but may fail if code CLI not available)
 	result, err = exec.ExecuteTool(ctx, openCall)
 	// Skip verification if VSCode CLI is not available
 	if err != nil && result.Message != "tool not found" {
 		t.Logf("vscode_open_file result: %v (may fail without VSCode CLI)", err)
 	}
+
+	// Test 3.2: vscode_append_file，写入文章
+
+	// Test 3.3: vscode_write_file, 对文章进行修改
 
 	// Test 4: Destroy VSCode instance
 	destroyCall := executor.ToolCall{

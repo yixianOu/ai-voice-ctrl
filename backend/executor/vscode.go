@@ -6,15 +6,17 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
+	execCmd "os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 // VSCodeTool 封装 VS Code 的 CLI 操作。
 type VSCodeTool struct {
 	workspace string
 	codePath  string
+	process   *os.Process
 }
 
 // NewVSCodeTool 创建一个 VS Code 工具实例。
@@ -29,7 +31,7 @@ func NewVSCodeTool(workspace string) (*VSCodeTool, error) {
 		return nil, fmt.Errorf("resolve workspace path: %w", err)
 	}
 
-	codePath, err := exec.LookPath("code")
+	codePath, err := execCmd.LookPath("code")
 	if err != nil {
 		return nil, fmt.Errorf("VS Code CLI not found: %w", err)
 	}
@@ -204,7 +206,7 @@ func (t *VSCodeTool) resolvePath(input string) (string, error) {
 }
 
 func (t *VSCodeTool) runVSCodeCommand(ctx context.Context, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, t.codePath, args...)
+	cmd := execCmd.CommandContext(ctx, t.codePath, args...)
 	cmd.Env = os.Environ()
 	output, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(output)), err
@@ -358,21 +360,36 @@ func (t *VSCodeTool) createVSCodeExecutor(exec Executor) ToolExecutor {
 		}
 
 		ctx = ensureContext(ctx)
-		if _, err := tool.runVSCodeCommand(ctx, tool.workspace); err != nil {
+		vsCmd := execCmd.CommandContext(ctx, tool.codePath, "--new-window", tool.workspace)
+		vsCmd.Env = os.Environ()
+		if err := vsCmd.Start(); err != nil {
 			return ToolResult{Success: false, Message: "failed to open workspace"}, fmt.Errorf("open workspace: %w", err)
 		}
+
+		tool.process = vsCmd.Process
 
 		exec.StoreInstance("vscode", tool)
 		return ToolResult{
 			Success: true,
 			Message: "VSCode instance created and workspace opened",
-			Data:    map[string]interface{}{"workspace": args.Workspace},
+			Data:    map[string]interface{}{"workspace": args.Workspace, "pid": vsCmd.Process.Pid},
 		}, nil
 	}
 }
 
 func (t *VSCodeTool) destroyVSCodeExecutor(exec Executor) ToolExecutor {
 	return func(ctx context.Context, payload json.RawMessage) (ToolResult, error) {
+		tool, err := t.getVSCodeInstance(exec)
+		if err != nil {
+			return ToolResult{Success: false, Message: err.Error()}, err
+		}
+
+		if tool.process != nil {
+			if err := tool.process.Signal(syscall.SIGTERM); err != nil {
+				_ = tool.process.Kill()
+			}
+		}
+
 		exec.DeleteInstance("vscode")
 		return ToolResult{Success: true, Message: "VSCode instance destroyed"}, nil
 	}
