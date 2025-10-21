@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+	"time"
 
 	"ai-voice-ctrl/backend/executor"
+	"ai-voice-ctrl/backend/executor/vscode"
 )
 
 // Example demonstrates LLM-driven tool lifecycle management.
@@ -15,7 +17,7 @@ func ExampleRegisterVSCodeLifecycle() {
 	exec := executor.NewDefaultExecutor()
 
 	// 2. Register VSCode with lifecycle functions
-	if err := executor.RegisterVSCodeLifecycle(exec); err != nil {
+	if err := vscode.RegisterVSCodeLifecycle(exec); err != nil {
 		fmt.Printf("Registration failed: %v\n", err)
 		return
 	}
@@ -61,7 +63,7 @@ func ExampleRegisterVSCodeLifecycle() {
 func TestSessionLifecycle(t *testing.T) {
 	exec := executor.NewDefaultExecutor()
 
-	if err := executor.RegisterVSCodeLifecycle(exec); err != nil {
+	if err := vscode.RegisterVSCodeLifecycle(exec); err != nil {
 		t.Fatalf("RegisterVSCodeLifecycle failed: %v", err)
 	}
 
@@ -83,7 +85,7 @@ func TestSessionLifecycle(t *testing.T) {
 	// Test 2: Create VSCode instance with current directory
 	createCall := executor.ToolCall{
 		Name:      "create_vscode",
-		Arguments: json.RawMessage(`{"workspace": "/home/orician/workspace/doc"}`),
+		Arguments: json.RawMessage(`{"workspace": "/tmp/test"}`),
 	}
 	result, err = exec.ExecuteTool(ctx, createCall)
 	if err != nil {
@@ -93,40 +95,100 @@ func TestSessionLifecycle(t *testing.T) {
 		t.Error("create_vscode should succeed")
 	}
 
-	// Test 3.1: Now vscode_open_file should work (but may fail if code CLI not available)
-	result, err = exec.ExecuteTool(ctx, openCall)
-	// Skip verification if VSCode CLI is not available
-	if err != nil && result.Message != "tool not found" {
-		t.Logf("vscode_open_file result: %v (may fail without VSCode CLI)", err)
-	}
+	go func() {
+		// Phase 1: 前5秒执行多文件写入测试
+		t.Log("Phase 1: Multiple files write test (5 seconds)")
+		phase1Deadline := time.Now().Add(5 * time.Second)
+		fileIndex := 0
 
-	// Test 3.2: vscode_write_file，写入文章
-	writeCall := executor.ToolCall{
-		Name: "vscode_write_file",
-		Arguments: json.RawMessage(`{
-			"path": "artical.md",
-			"content": "# My Article\n\nThis is a test article written by VSCode tool.\n\n## Introduction\n\nLorem ipsum dolor sit amet.\n",
+		for time.Now().Before(phase1Deadline) {
+			fileIndex++
+			fileName := fmt.Sprintf("test_file_%d.md", fileIndex)
+
+			// 写入不同文件
+			writeCall := executor.ToolCall{
+				Name: "vscode_write_file",
+				Arguments: json.RawMessage(fmt.Sprintf(`{
+			"path": "%s",
+			"content": "# Test File %d\n\nCreated at: %s\n\n## Content\n\nThis is test file number %d.\n",
 			"open_in_editor": true
-		}`),
-	}
-	result, err = exec.ExecuteTool(ctx, writeCall)
-	if err != nil {
-		t.Logf("vscode_write_file result: %v", err)
-	}
+		}`, fileName, fileIndex, time.Now().Format(time.RFC3339), fileIndex)),
+			}
+			result, err = exec.ExecuteTool(ctx, writeCall)
+			if err != nil {
+				t.Logf("Phase 1 - Write file %d failed: %v", fileIndex, err)
+			} else {
+				t.Logf("Phase 1 - Completed file %d: %s", fileIndex, fileName)
+			}
 
-	// Test 3.3: vscode_append_file，追加内容到文章
-	appendCall := executor.ToolCall{
-		Name: "vscode_append_file",
-		Arguments: json.RawMessage(`{
-			"path": "artical.md",
-			"content": "\n## Conclusion\n\nThis content was appended by vscode_append_file.\n",
+			time.Sleep(300 * time.Millisecond)
+		}
+
+		// Phase 2: 后5秒执行单文件多次写入和修改
+		t.Log("Phase 2: Single file multiple modifications (5 seconds)")
+		phase2Deadline := time.Now().Add(5 * time.Second)
+		singleFileName := "target_file.md"
+		modificationIndex := 0
+
+		// 初始创建文件
+		writeCall := executor.ToolCall{
+			Name: "vscode_write_file",
+			Arguments: json.RawMessage(fmt.Sprintf(`{
+			"path": "%s",
+			"content": "# Target File\n\nInitial content created at: %s\n\n",
+			"open_in_editor": true
+		}`, singleFileName, time.Now().Format(time.RFC3339))),
+		}
+		result, err = exec.ExecuteTool(ctx, writeCall)
+		if err != nil {
+			t.Logf("Phase 2 - Initial write failed: %v", err)
+		}
+
+		for time.Now().Before(phase2Deadline) {
+			modificationIndex++
+
+			// 交替执行写入和追加
+			if modificationIndex%2 == 0 {
+				// 重写文件
+				writeCall := executor.ToolCall{
+					Name: "vscode_write_file",
+					Arguments: json.RawMessage(fmt.Sprintf(`{
+			"path": "%s",
+			"content": "# Target File\n\nRewritten at: %s\n\n## Modification %d\n\nThis is rewrite number %d.\n",
+			"open_in_editor": true
+		}`, singleFileName, time.Now().Format(time.RFC3339), modificationIndex, modificationIndex)),
+				}
+				result, err = exec.ExecuteTool(ctx, writeCall)
+				if err != nil {
+					t.Logf("Phase 2 - Rewrite %d failed: %v", modificationIndex, err)
+				} else {
+					t.Logf("Phase 2 - Rewrite %d completed", modificationIndex)
+				}
+			} else {
+				// 追加内容
+				appendCall := executor.ToolCall{
+					Name: "vscode_append_file",
+					Arguments: json.RawMessage(fmt.Sprintf(`{
+			"path": "%s",
+			"content": "\n### Append %d\n\nAppended at: %s\n",
 			"open_in_editor": false
-		}`),
-	}
-	result, err = exec.ExecuteTool(ctx, appendCall)
-	if err != nil {
-		t.Logf("vscode_append_file result: %v", err)
-	}
+		}`, singleFileName, modificationIndex, time.Now().Format(time.RFC3339))),
+				}
+				result, err = exec.ExecuteTool(ctx, appendCall)
+				if err != nil {
+					t.Logf("Phase 2 - Append %d failed: %v", modificationIndex, err)
+				} else {
+					t.Logf("Phase 2 - Append %d completed", modificationIndex)
+				}
+			}
+
+			time.Sleep(300 * time.Millisecond)
+		}
+
+		t.Logf("Test completed: Phase 1 created %d files, Phase 2 made %d modifications", fileIndex, modificationIndex)
+	}()
+
+	<-time.After(10 * time.Second)
 
 	// Test 4: Destroy VSCode instance
 	destroyCall := executor.ToolCall{

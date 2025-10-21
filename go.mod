@@ -4,17 +4,17 @@ go 1.25.1
 
 require (
 	github.com/gen2brain/malgo v0.11.24
-	github.com/go-audio/audio v1.0.0
-	github.com/go-audio/wav v1.1.0
+	github.com/openai/openai-go/v2 v2.7.1
+	github.com/sashabaranov/go-openai v1.41.2
 	github.com/wailsapp/wails/v2 v2.10.2
+	github.com/zmb3/spotify/v2 v2.4.3
+	golang.org/x/oauth2 v0.32.0
 )
 
 require (
 	github.com/bep/debounce v1.2.1 // indirect
-	github.com/go-audio/riff v1.0.0 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
-	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/jchv/go-winloader v0.0.0-20210711035445-715c2860da7e // indirect
@@ -26,7 +26,6 @@ require (
 	github.com/leaanthony/u v1.1.1 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/openai/openai-go/v2 v2.7.1 // indirect
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
@@ -40,14 +39,10 @@ require (
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/wailsapp/go-webview2 v1.0.19 // indirect
 	github.com/wailsapp/mimetype v1.4.1 // indirect
-	github.com/zmb3/spotify/v2 v2.4.3 // indirect
 	golang.org/x/crypto v0.33.0 // indirect
 	golang.org/x/net v0.35.0 // indirect
-	golang.org/x/oauth2 v0.32.0 // indirect
 	golang.org/x/sys v0.36.0 // indirect
 	golang.org/x/text v0.22.0 // indirect
-	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/protobuf v1.33.0 // indirect
 )
 
 // replace github.com/wailsapp/wails/v2 v2.10.2 => /home/orician/go/pkg/mod

@@ -1,0 +1,59 @@
+{
+  "name": "ai-voice-ctrl-bridge",
+  "displayName": "AI Voice Control Bridge",
+  "description": "Bridge extension for Go backend to control VSCode",
+  "version": "0.1.0",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "ai-voice-ctrl-bridge.startServer",
+        "title": "Start Bridge Server"
+      },
+      {
+        "command": "ai-voice-ctrl-bridge.stopServer",
+        "title": "Stop Bridge Server"
+      }
+    ],
+    "configuration": {
+      "title": "AI Voice Control Bridge",
+      "properties": {
+        "aiVoiceCtrlBridge.port": {
+          "type": "number",
+          "default": 9527,
+          "description": "HTTP server port"
+        },
+        "aiVoiceCtrlBridge.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "Auto start server on extension activation"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.80.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "@vscode/vsce": "^3.6.2",
+    "eslint": "^8.0.0",
+    "typescript": "^5.0.0"
+  }
+}
