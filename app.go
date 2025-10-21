@@ -65,9 +65,30 @@ func (a *App) startup(ctx context.Context) {
 
 // shutdown is called when the app is closing
 func (a *App) shutdown(ctx context.Context) {
-	// Clean up resources
+	// Clean up audio handler resources
 	if a.audioHandler != nil {
 		a.audioHandler.Close()
+	}
+
+	// Clean up executor instances (VSCode, Spotify, etc.)
+	if a.executor != nil {
+		// Try to close VSCode instance if exists
+		if _, ok := a.executor.LoadInstance("vscode"); ok {
+			destroyCall := executor.ToolCall{
+				Name:      "destroy_vscode",
+				Arguments: []byte(`{}`),
+			}
+			a.executor.ExecuteTool(ctx, destroyCall)
+		}
+
+		// Try to stop Spotify server if exists
+		if _, ok := a.executor.LoadInstance("spotify_server"); ok {
+			stopCall := executor.ToolCall{
+				Name:      "spotify_stop_server",
+				Arguments: []byte(`{}`),
+			}
+			a.executor.ExecuteTool(ctx, stopCall)
+		}
 	}
 }
 
