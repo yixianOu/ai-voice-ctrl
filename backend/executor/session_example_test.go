@@ -70,7 +70,7 @@ func TestSessionLifecycle(t *testing.T) {
 	// Test 1: Call vscode_open_file without create_vscode should fail
 	openCall := executor.ToolCall{
 		Name:      "vscode_open_file",
-		Arguments: json.RawMessage(`{"path": "test.go"}`),
+		Arguments: json.RawMessage(`{"path": "artical.md"}`),
 	}
 	result, err := exec.ExecuteTool(ctx, openCall)
 	if err == nil {
@@ -100,9 +100,33 @@ func TestSessionLifecycle(t *testing.T) {
 		t.Logf("vscode_open_file result: %v (may fail without VSCode CLI)", err)
 	}
 
-	// Test 3.2: vscode_append_file，写入文章
+	// Test 3.2: vscode_write_file，写入文章
+	writeCall := executor.ToolCall{
+		Name: "vscode_write_file",
+		Arguments: json.RawMessage(`{
+			"path": "artical.md",
+			"content": "# My Article\n\nThis is a test article written by VSCode tool.\n\n## Introduction\n\nLorem ipsum dolor sit amet.\n",
+			"open_in_editor": true
+		}`),
+	}
+	result, err = exec.ExecuteTool(ctx, writeCall)
+	if err != nil {
+		t.Logf("vscode_write_file result: %v", err)
+	}
 
-	// Test 3.3: vscode_write_file, 对文章进行修改
+	// Test 3.3: vscode_append_file，追加内容到文章
+	appendCall := executor.ToolCall{
+		Name: "vscode_append_file",
+		Arguments: json.RawMessage(`{
+			"path": "artical.md",
+			"content": "\n## Conclusion\n\nThis content was appended by vscode_append_file.\n",
+			"open_in_editor": false
+		}`),
+	}
+	result, err = exec.ExecuteTool(ctx, appendCall)
+	if err != nil {
+		t.Logf("vscode_append_file result: %v", err)
+	}
 
 	// Test 4: Destroy VSCode instance
 	destroyCall := executor.ToolCall{

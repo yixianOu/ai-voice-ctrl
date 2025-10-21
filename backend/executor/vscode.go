@@ -9,14 +9,12 @@ import (
 	execCmd "os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 )
 
 // VSCodeTool 封装 VS Code 的 CLI 操作。
 type VSCodeTool struct {
 	workspace string
 	codePath  string
-	process   *os.Process
 }
 
 // NewVSCodeTool 创建一个 VS Code 工具实例。
@@ -56,6 +54,15 @@ func (t *VSCodeTool) openFile(ctx context.Context, payload json.RawMessage) (Too
 		return ToolResult{Success: false, Message: err.Error()}, err
 	}
 
+	if _, err := os.Stat(resolvedPath); os.IsNotExist(err) {
+		if err := os.MkdirAll(filepath.Dir(resolvedPath), 0o755); err != nil {
+			return ToolResult{Success: false, Message: "failed to create parent directory"}, fmt.Errorf("create parent directories: %w", err)
+		}
+		if err := os.WriteFile(resolvedPath, []byte(""), 0o644); err != nil {
+			return ToolResult{Success: false, Message: "failed to create file"}, fmt.Errorf("create file: %w", err)
+		}
+	}
+
 	ctx = ensureContext(ctx)
 
 	var commandArgs []string
@@ -63,9 +70,9 @@ func (t *VSCodeTool) openFile(ctx context.Context, payload json.RawMessage) (Too
 		if *args.Line < 1 {
 			return ToolResult{Success: false, Message: "line must be at least 1"}, errors.New("line out of range")
 		}
-		commandArgs = []string{"-g", fmt.Sprintf("%s:%d", resolvedPath, *args.Line)}
+		commandArgs = []string{t.workspace, "-g", fmt.Sprintf("%s:%d", resolvedPath, *args.Line)}
 	} else {
-		commandArgs = []string{resolvedPath}
+		commandArgs = []string{t.workspace, resolvedPath}
 	}
 
 	stdout, err := t.runVSCodeCommand(ctx, commandArgs...)
@@ -99,9 +106,9 @@ func (t *VSCodeTool) writeFile(ctx context.Context, payload json.RawMessage) (To
 		return ToolResult{Success: false, Message: "failed to write file"}, fmt.Errorf("write file: %w", err)
 	}
 
+	ctx = ensureContext(ctx)
 	if args.OpenInEditor {
-		ctx = ensureContext(ctx)
-		if output, runErr := t.runVSCodeCommand(ctx, resolvedPath); runErr != nil {
+		if output, runErr := t.runVSCodeCommand(ctx, t.workspace, "-r", resolvedPath); runErr != nil {
 			return ToolResult{Success: false, Message: stderrOrFallback(output, runErr)}, fmt.Errorf("open written file: %w", runErr)
 		}
 	}
@@ -138,9 +145,9 @@ func (t *VSCodeTool) appendFile(ctx context.Context, payload json.RawMessage) (T
 		return ToolResult{Success: false, Message: "failed to append text"}, fmt.Errorf("append content: %w", err)
 	}
 
+	ctx = ensureContext(ctx)
 	if args.OpenInEditor {
-		ctx = ensureContext(ctx)
-		if output, runErr := t.runVSCodeCommand(ctx, resolvedPath); runErr != nil {
+		if output, runErr := t.runVSCodeCommand(ctx, t.workspace, "-r", resolvedPath); runErr != nil {
 			return ToolResult{Success: false, Message: stderrOrFallback(output, runErr)}, fmt.Errorf("open appended file: %w", runErr)
 		}
 	}
@@ -162,7 +169,7 @@ func (t *VSCodeTool) executeCommand(ctx context.Context, payload json.RawMessage
 	}
 
 	ctx = ensureContext(ctx)
-	commandArgs := append([]string{"--command", args.Command}, args.Args...)
+	commandArgs := append([]string{t.workspace, "--command", args.Command}, args.Args...)
 	stdout, err := t.runVSCodeCommand(ctx, commandArgs...)
 	if err != nil {
 		return ToolResult{Success: false, Message: stderrOrFallback(stdout, err)}, fmt.Errorf("execute VS Code command: %w", err)
@@ -366,8 +373,6 @@ func (t *VSCodeTool) createVSCodeExecutor(exec Executor) ToolExecutor {
 			return ToolResult{Success: false, Message: "failed to open workspace"}, fmt.Errorf("open workspace: %w", err)
 		}
 
-		tool.process = vsCmd.Process
-
 		exec.StoreInstance("vscode", tool)
 		return ToolResult{
 			Success: true,
@@ -379,19 +384,16 @@ func (t *VSCodeTool) createVSCodeExecutor(exec Executor) ToolExecutor {
 
 func (t *VSCodeTool) destroyVSCodeExecutor(exec Executor) ToolExecutor {
 	return func(ctx context.Context, payload json.RawMessage) (ToolResult, error) {
-		tool, err := t.getVSCodeInstance(exec)
+		_, err := t.getVSCodeInstance(exec)
 		if err != nil {
 			return ToolResult{Success: false, Message: err.Error()}, err
 		}
 
-		if tool.process != nil {
-			if err := tool.process.Signal(syscall.SIGTERM); err != nil {
-				_ = tool.process.Kill()
-			}
-		}
-
 		exec.DeleteInstance("vscode")
-		return ToolResult{Success: true, Message: "VSCode instance destroyed"}, nil
+		return ToolResult{
+			Success: true,
+			Message: "VSCode instance destroyed (window remains open, please close manually)",
+		}, nil
 	}
 }
 
