@@ -1,3 +1,4 @@
+// Package openai implements an OpenAI-based agent with function calling capabilities.
 package openai
 
 import (

@@ -1,3 +1,4 @@
+// Package handler implements the command handler coordinating voice/text input with LLM agent and tool execution.
 package handler
 
 import (

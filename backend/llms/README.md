@@ -237,30 +237,3 @@ agent.Reset()
 response, err := agent.Chat(ctx, "打开不存在的文件")
 // LLM可能返回："文件不存在，我已为您创建该文件"
 ```
-
-## 6. 扩展性
-
-### 添加新的LLM提供商
-
-实现`Agent`接口即可：
-
-```go
-// llms/anthropic/agent.go
-type ClaudeAgent struct { ... }
-
-func (a *ClaudeAgent) Chat(...) { ... }
-```
-
-### 添加新的工具
-
-在`executor/`包注册即可，Agent自动识别：
-
-```go
-exec.RegisterTool("browser", browserDefinitions)
-```
-
-## 7. 测试策略
-
-- 单元测试：`llms/openai/agent_test.go`
-- 集成测试：`handler/command_handler_test.go`
-- E2E测试：`backend/executor/openai_integration_test.go`（已完成）

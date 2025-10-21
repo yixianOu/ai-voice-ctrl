@@ -1,3 +1,4 @@
+// Package llms defines interfaces and structures for LLM agents with function calling capabilities.
 package llms
 
 import "context"
