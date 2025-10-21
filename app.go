@@ -122,24 +122,24 @@ func (a *App) GetConversationHistory() []llms.Message {
 // ==================== Audio Recording Methods ====================
 
 // StartRecording starts audio recording (manual mode)
-func (a *App) StartRecording() error {
-	return a.audioHandler.StartRecording()
-}
+// func (a *App) StartRecording() error {
+// 	return a.audioHandler.StartRecording()
+// }
 
-// StopRecording stops audio recording and returns WAV data
-func (a *App) StopRecording() ([]byte, error) {
-	return a.audioHandler.StopRecording()
-}
+// // StopRecording stops audio recording and returns WAV data
+// func (a *App) StopRecording() ([]byte, error) {
+// 	return a.audioHandler.StopRecording()
+// }
 
 // RecordAudio records audio for specified seconds
-func (a *App) RecordAudio(seconds int) ([]byte, error) {
-	return a.audioHandler.RecordAudio(seconds)
-}
+// func (a *App) RecordAudio(seconds int) ([]byte, error) {
+// 	return a.audioHandler.RecordAudio(seconds)
+// }
 
 // RecordAudioWithVAD records audio with VAD (auto-stops when user stops speaking)
-func (a *App) RecordAudioWithVAD() ([]byte, error) {
-	return a.audioHandler.RecordAudioWithVAD()
-}
+// func (a *App) RecordAudioWithVAD() ([]byte, error) {
+// 	return a.audioHandler.RecordAudioWithVAD()
+// }
 
 // ==================== Speech Recognition Methods ====================
 
@@ -222,9 +222,9 @@ func (a *App) IsRecording() bool {
 }
 
 // GetLastTranscript returns the last transcribed text
-func (a *App) GetLastTranscript() string {
-	return a.audioHandler.GetLastTranscript()
-}
+// func (a *App) GetLastTranscript() string {
+// 	return a.audioHandler.GetLastTranscript()
+// }
 
 // GetASRServiceName returns the name of current ASR service
 // func (a *App) GetASRServiceName() string {
