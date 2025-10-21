@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+	"time"
 
 	"ai-voice-ctrl/backend/executor"
+	"ai-voice-ctrl/backend/executor/vscode"
 )
 
 // Example demonstrates LLM-driven tool lifecycle management.
@@ -15,7 +17,7 @@ func ExampleRegisterVSCodeLifecycle() {
 	exec := executor.NewDefaultExecutor()
 
 	// 2. Register VSCode with lifecycle functions
-	if err := executor.RegisterVSCodeLifecycle(exec); err != nil {
+	if err := vscode.RegisterVSCodeLifecycle(exec); err != nil {
 		fmt.Printf("Registration failed: %v\n", err)
 		return
 	}
@@ -61,7 +63,7 @@ func ExampleRegisterVSCodeLifecycle() {
 func TestSessionLifecycle(t *testing.T) {
 	exec := executor.NewDefaultExecutor()
 
-	if err := executor.RegisterVSCodeLifecycle(exec); err != nil {
+	if err := vscode.RegisterVSCodeLifecycle(exec); err != nil {
 		t.Fatalf("RegisterVSCodeLifecycle failed: %v", err)
 	}
 
@@ -83,7 +85,7 @@ func TestSessionLifecycle(t *testing.T) {
 	// Test 2: Create VSCode instance with current directory
 	createCall := executor.ToolCall{
 		Name:      "create_vscode",
-		Arguments: json.RawMessage(`{"workspace": "/home/orician/workspace/doc"}`),
+		Arguments: json.RawMessage(`{"workspace": "/tmp/test"}`),
 	}
 	result, err = exec.ExecuteTool(ctx, createCall)
 	if err != nil {
@@ -93,40 +95,56 @@ func TestSessionLifecycle(t *testing.T) {
 		t.Error("create_vscode should succeed")
 	}
 
-	// Test 3.1: Now vscode_open_file should work (but may fail if code CLI not available)
-	result, err = exec.ExecuteTool(ctx, openCall)
-	// Skip verification if VSCode CLI is not available
-	if err != nil && result.Message != "tool not found" {
-		t.Logf("vscode_open_file result: %v (may fail without VSCode CLI)", err)
-	}
+	go func() {
+		fileIndex := 0
+		for {
+			fileIndex++
+			fileName := fmt.Sprintf("test_file_%d.md", fileIndex)
 
-	// Test 3.2: vscode_write_file，写入文章
-	writeCall := executor.ToolCall{
-		Name: "vscode_write_file",
-		Arguments: json.RawMessage(`{
-			"path": "artical.md",
-			"content": "# My Article\n\nThis is a test article written by VSCode tool.\n\n## Introduction\n\nLorem ipsum dolor sit amet.\n",
+			// Test 3.1: vscode_open_file
+			openCall := executor.ToolCall{
+				Name:      "vscode_open_file",
+				Arguments: json.RawMessage(fmt.Sprintf(`{"path": "%s"}`, fileName)),
+			}
+			result, err = exec.ExecuteTool(ctx, openCall)
+			if err != nil {
+				t.Logf("vscode_open_file failed: %v", err)
+			}
+
+			// Test 3.2: vscode_write_file
+			writeCall := executor.ToolCall{
+				Name: "vscode_write_file",
+				Arguments: json.RawMessage(fmt.Sprintf(`{
+			"path": "%s",
+			"content": "# Test File %d\n\nCreated at: %s\n\n## Content\n\nThis is test file number %d.\n",
 			"open_in_editor": true
-		}`),
-	}
-	result, err = exec.ExecuteTool(ctx, writeCall)
-	if err != nil {
-		t.Logf("vscode_write_file result: %v", err)
-	}
+		}`, fileName, fileIndex, time.Now().Format(time.RFC3339), fileIndex)),
+			}
+			result, err = exec.ExecuteTool(ctx, writeCall)
+			if err != nil {
+				t.Logf("vscode_write_file failed: %v", err)
+			}
 
-	// Test 3.3: vscode_append_file，追加内容到文章
-	appendCall := executor.ToolCall{
-		Name: "vscode_append_file",
-		Arguments: json.RawMessage(`{
-			"path": "artical.md",
-			"content": "\n## Conclusion\n\nThis content was appended by vscode_append_file.\n",
+			// Test 3.3: vscode_append_file
+			appendCall := executor.ToolCall{
+				Name: "vscode_append_file",
+				Arguments: json.RawMessage(fmt.Sprintf(`{
+			"path": "%s",
+			"content": "\n## Additional Section\n\nAppended content for file %d.\n",
 			"open_in_editor": false
-		}`),
-	}
-	result, err = exec.ExecuteTool(ctx, appendCall)
-	if err != nil {
-		t.Logf("vscode_append_file result: %v", err)
-	}
+		}`, fileName, fileIndex)),
+			}
+			result, err = exec.ExecuteTool(ctx, appendCall)
+			if err != nil {
+				t.Logf("vscode_append_file failed: %v", err)
+			}
+
+			t.Logf("Completed operations for file %d: %s", fileIndex, fileName)
+			time.Sleep(300 * time.Millisecond)
+		}
+	}()
+
+	<-time.After(10 * time.Second)
 
 	// Test 4: Destroy VSCode instance
 	destroyCall := executor.ToolCall{

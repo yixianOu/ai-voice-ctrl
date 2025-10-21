@@ -9,14 +9,16 @@ import (
 	execCmd "os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"ai-voice-ctrl/backend/executor"
 )
 
-// VSCodeTool 封装 VS Code 的 CLI 操作。
+// VSCodeTool 封装 VS Code 的 HTTP Bridge 操作。
 type VSCodeTool struct {
-	workspace string
-	codePath  string
+	workspace  string
+	codePath   string
+	httpBridge *VSCodeHTTPTool
 }
 
 // NewVSCodeTool 创建一个 VS Code 工具实例。
@@ -36,9 +38,15 @@ func NewVSCodeTool(workspace string) (*VSCodeTool, error) {
 		return nil, fmt.Errorf("VS Code CLI not found: %w", err)
 	}
 
+	httpBridge, err := NewVSCodeHTTPTool(absWorkspace, 9527)
+	if err != nil {
+		return nil, fmt.Errorf("create HTTP bridge: %w", err)
+	}
+
 	return &VSCodeTool{
-		workspace: absWorkspace,
-		codePath:  codePath,
+		workspace:  absWorkspace,
+		codePath:   codePath,
+		httpBridge: httpBridge,
 	}, nil
 }
 
@@ -65,24 +73,7 @@ func (t *VSCodeTool) openFile(ctx context.Context, payload json.RawMessage) (exe
 		}
 	}
 
-	ctx = ensureContext(ctx)
-
-	var commandArgs []string
-	if args.Line != nil {
-		if *args.Line < 1 {
-			return executor.ToolResult{Success: false, Message: "line must be at least 1"}, errors.New("line out of range")
-		}
-		commandArgs = []string{t.workspace, "-g", fmt.Sprintf("%s:%d", resolvedPath, *args.Line)}
-	} else {
-		commandArgs = []string{t.workspace, resolvedPath}
-	}
-
-	stdout, err := t.runVSCodeCommand(ctx, commandArgs...)
-	if err != nil {
-		return executor.ToolResult{Success: false, Message: stderrOrFallback(stdout, err)}, fmt.Errorf("open file with VS Code: %w", err)
-	}
-
-	return executor.ToolResult{Success: true, Message: "file opened", Data: map[string]interface{}{"path": resolvedPath}}, nil
+	return t.httpBridge.openFile(ctx, payload)
 }
 
 func (t *VSCodeTool) writeFile(ctx context.Context, payload json.RawMessage) (executor.ToolResult, error) {
@@ -108,11 +99,9 @@ func (t *VSCodeTool) writeFile(ctx context.Context, payload json.RawMessage) (ex
 		return executor.ToolResult{Success: false, Message: "failed to write file"}, fmt.Errorf("write file: %w", err)
 	}
 
-	ctx = ensureContext(ctx)
 	if args.OpenInEditor {
-		if output, runErr := t.runVSCodeCommand(ctx, t.workspace, "-r", resolvedPath); runErr != nil {
-			return executor.ToolResult{Success: false, Message: stderrOrFallback(output, runErr)}, fmt.Errorf("open written file: %w", runErr)
-		}
+		openPayload, _ := json.Marshal(map[string]interface{}{"path": args.Path})
+		return t.httpBridge.openFile(ctx, openPayload)
 	}
 
 	return executor.ToolResult{Success: true, Message: "file written", Data: map[string]interface{}{"path": resolvedPath}}, nil
@@ -147,10 +136,12 @@ func (t *VSCodeTool) appendFile(ctx context.Context, payload json.RawMessage) (e
 		return executor.ToolResult{Success: false, Message: "failed to append text"}, fmt.Errorf("append content: %w", err)
 	}
 
-	ctx = ensureContext(ctx)
 	if args.OpenInEditor {
-		if output, runErr := t.runVSCodeCommand(ctx, t.workspace, "-r", resolvedPath); runErr != nil {
-			return executor.ToolResult{Success: false, Message: stderrOrFallback(output, runErr)}, fmt.Errorf("open appended file: %w", runErr)
+		openPayload, _ := json.Marshal(map[string]interface{}{"path": args.Path})
+		if result, err := t.httpBridge.openFile(ctx, openPayload); err != nil {
+			return executor.ToolResult{Success: false, Message: err.Error()}, err
+		} else {
+			return result, nil
 		}
 	}
 
@@ -375,6 +366,8 @@ func (t *VSCodeTool) createVSCodeExecutor(exec executor.Executor) executor.ToolE
 			return executor.ToolResult{Success: false, Message: "failed to open workspace"}, fmt.Errorf("open workspace: %w", err)
 		}
 
+		time.Sleep(10 * time.Second)
+
 		exec.StoreInstance("vscode", tool)
 		return executor.ToolResult{
 			Success: true,
@@ -386,15 +379,18 @@ func (t *VSCodeTool) createVSCodeExecutor(exec executor.Executor) executor.ToolE
 
 func (t *VSCodeTool) destroyVSCodeExecutor(exec executor.Executor) executor.ToolExecutor {
 	return func(ctx context.Context, payload json.RawMessage) (executor.ToolResult, error) {
-		_, err := t.getVSCodeInstance(exec)
+		tool, err := t.getVSCodeInstance(exec)
 		if err != nil {
 			return executor.ToolResult{Success: false, Message: err.Error()}, err
 		}
 
+		result, _ := tool.httpBridge.closeWindow(ctx, json.RawMessage(`{}`))
 		exec.DeleteInstance("vscode")
+
 		return executor.ToolResult{
 			Success: true,
-			Message: "VSCode instance destroyed (window remains open, please close manually)",
+			Message: "VSCode instance destroyed and window closed",
+			Data:    result.Data,
 		}, nil
 	}
 }
