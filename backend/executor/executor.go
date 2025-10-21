@@ -43,4 +43,7 @@ type Executor interface {
 	UnregisterTool(name string) error
 	ToolSchemas() []ToolSchema
 	ExecuteTool(ctx context.Context, call ToolCall) (ToolResult, error)
+	StoreInstance(name string, instance interface{})
+	LoadInstance(name string) (interface{}, bool)
+	DeleteInstance(name string)
 }

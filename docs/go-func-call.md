@@ -1,19 +1,24 @@
 
-## **核心问题：工具实例由llm创建!**
+## **核心问题：工具实例由 LLM 创建**
 
-### **模式 B：LLM 按需创建（Lazy Initialization）**
+### **已实现：Executor 内置实例管理**
+
+参见 `backend/executor/session.go` 和 `backend/executor/SESSION_USAGE.md`。
+
+核心设计：
+- `DefaultExecutor` 内置 `instances sync.Map` 管理工具实例
+- 每个工具包含 `create_*`、`*_action`、`destroy_*` 函数
+- LLM 通过 `create_*` 触发实例化，通过 `*_action` 执行操作
+
 ```go
-// LLM 决定何时创建工具
-// 用户："帮我打开 VSCode 编辑 main.go"
-// LLM 调用：create_vscode → edit_file
-func (s *Session) HandleFunctionCall(call FunctionCall) {
-    switch call.Name {
-    case "create_vscode":
-        s.Tools["vscode"] = createVSCode(call.Args)
-    case "vscode_edit_file":
-        s.Tools["vscode"].EditFile(...)
-    }
-}
+// 使用示例
+exec := executor.NewDefaultExecutor()
+executor.RegisterVSCodeLifecycle(exec)
+
+// LLM 调用流程：
+// 1. create_vscode({workspace: "/code"})
+// 2. vscode_open_file({path: "main.go"})
+// 3. destroy_vscode({})
 ```
 
 ---
@@ -82,88 +87,30 @@ LLM 推理：
 
 ## **针对你的 Go 客户端 + Function Call 场景的最佳实践**
 
-### **✅ 推荐方案：显式创建 + 状态追踪**
+### **✅ 已实现方案：Executor 内置实例管理**
 
+详见 `backend/executor/SESSION_USAGE.md`。
+
+核心实现：
 ```go
-package main
-
-import (
-    "context"
-    "encoding/json"
-    "fmt"
-)
-
-type DesktopController struct {
-    Registry *ToolRegistry
-    Session  *Session
+type DefaultExecutor struct {
+    tools     map[string]map[string]ToolDefinition
+    instances sync.Map // 工具实例缓存
 }
 
-func (dc *DesktopController) ChatLoop(ctx context.Context) {
-    for {
-        userInput := getUserInput()
-        
-        // 1. 调用 LLM（传递可用工具列表）
-        response := dc.callLLM(userInput, dc.getToolDefinitions())
-        
-        // 2. 处理 tool_calls
-        for _, toolCall := range response.ToolCalls {
-            result, err := dc.handleToolCall(toolCall)
-            
-            // 3. 将结果返回给 LLM
-            dc.sendToolResult(toolCall.ID, result, err)
-        }
-        
-        // 4. 输出最终回复
-        fmt.Println(response.Content)
-    }
+func RegisterVSCodeLifecycle(exec Executor) error {
+    // 注册 create_vscode, vscode_*, destroy_vscode
 }
+```
 
-func (dc *DesktopController) handleToolCall(call ToolCall) (string, error) {
-    switch call.Function.Name {
-    case "create_vscode":
-        workspace := call.Function.Arguments["workspace"].(string)
-        instance, err := dc.Registry.GetOrCreate("vscode", map[string]interface{}{
-            "workspace": workspace,
-        })
-        if err != nil {
-            return "", err
-        }
-        dc.Session.Tools["vscode"] = instance
-        return fmt.Sprintf("VSCode 已打开工作区: %s", workspace), nil
-        
-    case "vscode_open_file":
-        instance := dc.Session.Tools["vscode"]
-        if instance == nil {
-            return "", fmt.Errorf("VSCode 未启动，请先调用 create_vscode")
-        }
-        
-        file := call.Function.Arguments["file"].(string)
-        return instance.Adapter.Execute("open_file", map[string]interface{}{
-            "file": file,
-        })
-        
-    case "create_vlc":
-        instance, err := dc.Registry.GetOrCreate("vlc", nil)
-        if err != nil {
-            return "", err
-        }
-        dc.Session.Tools["vlc"] = instance
-        return "VLC 已启动", nil
-        
-    case "vlc_play":
-        instance := dc.Session.Tools["vlc"]
-        if instance == nil {
-            return "", fmt.Errorf("VLC 未启动，请先调用 create_vlc")
-        }
-        
-        file := call.Function.Arguments["file"].(string)
-        return instance.Adapter.Execute("play", map[string]interface{}{
-            "file": file,
-        })
-    }
-    
-    return "", fmt.Errorf("unknown tool: %s", call.Function.Name)
-}
+**使用流程**：
+```go
+exec := executor.NewDefaultExecutor()
+executor.RegisterVSCodeLifecycle(exec)
+
+// LLM 调用：
+// → create_vscode({workspace: "/code"})
+// → vscode_open_file({path: "main.go"})
 ```
 
 ---

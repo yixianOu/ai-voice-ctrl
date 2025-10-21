@@ -3,11 +3,13 @@ package executor
 import (
 	"context"
 	"fmt"
+	"sync"
 )
 
-// DefaultExecutor 实现 Executor，负责管理工具实例生命周期。
+// DefaultExecutor 实现 Executor，负责管理工具定义与实例生命周期。
 type DefaultExecutor struct {
-	tools map[string]map[string]ToolDefinition
+	tools     map[string]map[string]ToolDefinition
+	instances sync.Map
 }
 
 // NewDefaultExecutor creates an empty DefaultExecutor instance.
@@ -72,6 +74,21 @@ func (e *DefaultExecutor) ExecuteTool(ctx context.Context, call ToolCall) (ToolR
 		}
 	}
 	return ToolResult{Success: false, Message: "tool not found"}, fmt.Errorf("tool %s not registered", call.Name)
+}
+
+// StoreInstance stores a tool instance for the session.
+func (e *DefaultExecutor) StoreInstance(name string, instance interface{}) {
+	e.instances.Store(name, instance)
+}
+
+// LoadInstance retrieves a tool instance from the session.
+func (e *DefaultExecutor) LoadInstance(name string) (interface{}, bool) {
+	return e.instances.Load(name)
+}
+
+// DeleteInstance removes a tool instance from the session.
+func (e *DefaultExecutor) DeleteInstance(name string) {
+	e.instances.Delete(name)
 }
 
 var _ Executor = (*DefaultExecutor)(nil)
