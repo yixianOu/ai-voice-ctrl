@@ -1,0 +1,4 @@
+function calling在接入大模型的时候，在这个文件夹实现大模型的调用,因为这里面定义了openai的client.
+可以把结构体抽出来放入一个单独的文件，然后在一个新的文件放入你的function call相关的ai调用代码。
+这样相当于llms包+handler包就形成了一个类似agent的玩意。
+然后exector实例可能以外部注入的方式放入大模型的文件中比较好，比如NewOpenAIASR函数新增一个executor参数。
