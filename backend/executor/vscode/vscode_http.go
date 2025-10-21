@@ -1,4 +1,4 @@
-package executor
+package vscode
 
 import (
 	"bytes"
@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"ai-voice-ctrl/backend/executor"
 )
 
 // VSCodeHTTPTool communicates with VSCode via extension HTTP bridge.
@@ -85,18 +87,18 @@ func (t *VSCodeHTTPTool) sendCommand(ctx context.Context, action string, params 
 	return result, nil
 }
 
-func (t *VSCodeHTTPTool) openFile(ctx context.Context, payload json.RawMessage) (ToolResult, error) {
+func (t *VSCodeHTTPTool) openFile(ctx context.Context, payload json.RawMessage) (executor.ToolResult, error) {
 	var args struct {
 		Path string `json:"path"`
 		Line *int   `json:"line"`
 	}
 	if err := json.Unmarshal(payload, &args); err != nil {
-		return ToolResult{Success: false, Message: "invalid payload"}, err
+		return executor.ToolResult{Success: false, Message: "invalid payload"}, err
 	}
 
 	resolvedPath, err := t.resolvePath(args.Path)
 	if err != nil {
-		return ToolResult{Success: false, Message: err.Error()}, err
+		return executor.ToolResult{Success: false, Message: err.Error()}, err
 	}
 
 	params := map[string]interface{}{"path": resolvedPath}
@@ -106,61 +108,61 @@ func (t *VSCodeHTTPTool) openFile(ctx context.Context, payload json.RawMessage) 
 
 	result, err := t.sendCommand(ctx, "open_file", params)
 	if err != nil {
-		return ToolResult{Success: false, Message: err.Error()}, err
+		return executor.ToolResult{Success: false, Message: err.Error()}, err
 	}
 
-	return ToolResult{Success: true, Message: "file opened", Data: result}, nil
+	return executor.ToolResult{Success: true, Message: "file opened", Data: result}, nil
 }
 
-func (t *VSCodeHTTPTool) closeFile(ctx context.Context, payload json.RawMessage) (ToolResult, error) {
+func (t *VSCodeHTTPTool) closeFile(ctx context.Context, payload json.RawMessage) (executor.ToolResult, error) {
 	var args struct {
 		Path string `json:"path"`
 	}
 	if err := json.Unmarshal(payload, &args); err != nil {
-		return ToolResult{Success: false, Message: "invalid payload"}, err
+		return executor.ToolResult{Success: false, Message: "invalid payload"}, err
 	}
 
 	resolvedPath, err := t.resolvePath(args.Path)
 	if err != nil {
-		return ToolResult{Success: false, Message: err.Error()}, err
+		return executor.ToolResult{Success: false, Message: err.Error()}, err
 	}
 
 	result, err := t.sendCommand(ctx, "close_file", map[string]interface{}{"path": resolvedPath})
 	if err != nil {
-		return ToolResult{Success: false, Message: err.Error()}, err
+		return executor.ToolResult{Success: false, Message: err.Error()}, err
 	}
 
-	return ToolResult{Success: true, Message: "file closed", Data: result}, nil
+	return executor.ToolResult{Success: true, Message: "file closed", Data: result}, nil
 }
 
-func (t *VSCodeHTTPTool) refreshFile(ctx context.Context, payload json.RawMessage) (ToolResult, error) {
+func (t *VSCodeHTTPTool) refreshFile(ctx context.Context, payload json.RawMessage) (executor.ToolResult, error) {
 	var args struct {
 		Path string `json:"path"`
 	}
 	if err := json.Unmarshal(payload, &args); err != nil {
-		return ToolResult{Success: false, Message: "invalid payload"}, err
+		return executor.ToolResult{Success: false, Message: "invalid payload"}, err
 	}
 
 	resolvedPath, err := t.resolvePath(args.Path)
 	if err != nil {
-		return ToolResult{Success: false, Message: err.Error()}, err
+		return executor.ToolResult{Success: false, Message: err.Error()}, err
 	}
 
 	result, err := t.sendCommand(ctx, "refresh_file", map[string]interface{}{"path": resolvedPath})
 	if err != nil {
-		return ToolResult{Success: false, Message: err.Error()}, err
+		return executor.ToolResult{Success: false, Message: err.Error()}, err
 	}
 
-	return ToolResult{Success: true, Message: "file refreshed", Data: result}, nil
+	return executor.ToolResult{Success: true, Message: "file refreshed", Data: result}, nil
 }
 
-func (t *VSCodeHTTPTool) closeWindow(ctx context.Context, payload json.RawMessage) (ToolResult, error) {
+func (t *VSCodeHTTPTool) closeWindow(ctx context.Context, payload json.RawMessage) (executor.ToolResult, error) {
 	result, err := t.sendCommand(ctx, "close_window", map[string]interface{}{})
 	if err != nil {
-		return ToolResult{Success: false, Message: err.Error()}, err
+		return executor.ToolResult{Success: false, Message: err.Error()}, err
 	}
 
-	return ToolResult{Success: true, Message: "window closed", Data: result}, nil
+	return executor.ToolResult{Success: true, Message: "window closed", Data: result}, nil
 }
 
 func (t *VSCodeHTTPTool) resolvePath(input string) (string, error) {
@@ -185,8 +187,8 @@ func (t *VSCodeHTTPTool) resolvePath(input string) (string, error) {
 }
 
 // RegisterHTTPLifecycle registers VSCode HTTP bridge tool.
-func (t *VSCodeHTTPTool) RegisterHTTPLifecycle(exec Executor) error {
-	definitions := map[string]ToolDefinition{
+func (t *VSCodeHTTPTool) RegisterHTTPLifecycle(exec executor.Executor) error {
+	definitions := map[string]executor.ToolDefinition{
 		"vscode_open_file": {
 			Name:        "vscode_open_file",
 			Description: "Open file in VSCode via HTTP bridge",
@@ -198,7 +200,7 @@ func (t *VSCodeHTTPTool) RegisterHTTPLifecycle(exec Executor) error {
 				},
 				"required": ["path"]
 			}`),
-			Executor: func(ctx context.Context, payload json.RawMessage) (ToolResult, error) {
+			Executor: func(ctx context.Context, payload json.RawMessage) (executor.ToolResult, error) {
 				return t.openFile(ctx, payload)
 			},
 		},
@@ -212,7 +214,7 @@ func (t *VSCodeHTTPTool) RegisterHTTPLifecycle(exec Executor) error {
 				},
 				"required": ["path"]
 			}`),
-			Executor: func(ctx context.Context, payload json.RawMessage) (ToolResult, error) {
+			Executor: func(ctx context.Context, payload json.RawMessage) (executor.ToolResult, error) {
 				return t.closeFile(ctx, payload)
 			},
 		},
@@ -226,7 +228,7 @@ func (t *VSCodeHTTPTool) RegisterHTTPLifecycle(exec Executor) error {
 				},
 				"required": ["path"]
 			}`),
-			Executor: func(ctx context.Context, payload json.RawMessage) (ToolResult, error) {
+			Executor: func(ctx context.Context, payload json.RawMessage) (executor.ToolResult, error) {
 				return t.refreshFile(ctx, payload)
 			},
 		},
@@ -234,7 +236,7 @@ func (t *VSCodeHTTPTool) RegisterHTTPLifecycle(exec Executor) error {
 			Name:        "vscode_close_window",
 			Description: "Close VSCode window via HTTP bridge",
 			Parameters:  json.RawMessage(`{"type": "object", "properties": {}}`),
-			Executor: func(ctx context.Context, payload json.RawMessage) (ToolResult, error) {
+			Executor: func(ctx context.Context, payload json.RawMessage) (executor.ToolResult, error) {
 				return t.closeWindow(ctx, payload)
 			},
 		},

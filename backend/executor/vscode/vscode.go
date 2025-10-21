@@ -1,4 +1,4 @@
-package executor
+package vscode
 
 import (
 	"context"
@@ -9,6 +9,8 @@ import (
 	execCmd "os/exec"
 	"path/filepath"
 	"strings"
+
+	"ai-voice-ctrl/backend/executor"
 )
 
 // VSCodeTool 封装 VS Code 的 CLI 操作。
@@ -40,26 +42,26 @@ func NewVSCodeTool(workspace string) (*VSCodeTool, error) {
 	}, nil
 }
 
-func (t *VSCodeTool) openFile(ctx context.Context, payload json.RawMessage) (ToolResult, error) {
+func (t *VSCodeTool) openFile(ctx context.Context, payload json.RawMessage) (executor.ToolResult, error) {
 	var args struct {
 		Path string `json:"path"`
 		Line *int   `json:"line"`
 	}
 	if err := json.Unmarshal(payload, &args); err != nil {
-		return ToolResult{Success: false, Message: "invalid payload"}, fmt.Errorf("decode open file payload: %w", err)
+		return executor.ToolResult{Success: false, Message: "invalid payload"}, fmt.Errorf("decode open file payload: %w", err)
 	}
 
 	resolvedPath, err := t.resolvePath(args.Path)
 	if err != nil {
-		return ToolResult{Success: false, Message: err.Error()}, err
+		return executor.ToolResult{Success: false, Message: err.Error()}, err
 	}
 
 	if _, err := os.Stat(resolvedPath); os.IsNotExist(err) {
 		if err := os.MkdirAll(filepath.Dir(resolvedPath), 0o755); err != nil {
-			return ToolResult{Success: false, Message: "failed to create parent directory"}, fmt.Errorf("create parent directories: %w", err)
+			return executor.ToolResult{Success: false, Message: "failed to create parent directory"}, fmt.Errorf("create parent directories: %w", err)
 		}
 		if err := os.WriteFile(resolvedPath, []byte(""), 0o644); err != nil {
-			return ToolResult{Success: false, Message: "failed to create file"}, fmt.Errorf("create file: %w", err)
+			return executor.ToolResult{Success: false, Message: "failed to create file"}, fmt.Errorf("create file: %w", err)
 		}
 	}
 
@@ -68,7 +70,7 @@ func (t *VSCodeTool) openFile(ctx context.Context, payload json.RawMessage) (Too
 	var commandArgs []string
 	if args.Line != nil {
 		if *args.Line < 1 {
-			return ToolResult{Success: false, Message: "line must be at least 1"}, errors.New("line out of range")
+			return executor.ToolResult{Success: false, Message: "line must be at least 1"}, errors.New("line out of range")
 		}
 		commandArgs = []string{t.workspace, "-g", fmt.Sprintf("%s:%d", resolvedPath, *args.Line)}
 	} else {
@@ -77,105 +79,105 @@ func (t *VSCodeTool) openFile(ctx context.Context, payload json.RawMessage) (Too
 
 	stdout, err := t.runVSCodeCommand(ctx, commandArgs...)
 	if err != nil {
-		return ToolResult{Success: false, Message: stderrOrFallback(stdout, err)}, fmt.Errorf("open file with VS Code: %w", err)
+		return executor.ToolResult{Success: false, Message: stderrOrFallback(stdout, err)}, fmt.Errorf("open file with VS Code: %w", err)
 	}
 
-	return ToolResult{Success: true, Message: "file opened", Data: map[string]interface{}{"path": resolvedPath}}, nil
+	return executor.ToolResult{Success: true, Message: "file opened", Data: map[string]interface{}{"path": resolvedPath}}, nil
 }
 
-func (t *VSCodeTool) writeFile(ctx context.Context, payload json.RawMessage) (ToolResult, error) {
+func (t *VSCodeTool) writeFile(ctx context.Context, payload json.RawMessage) (executor.ToolResult, error) {
 	var args struct {
 		Path         string `json:"path"`
 		Content      string `json:"content"`
 		OpenInEditor bool   `json:"open_in_editor"`
 	}
 	if err := json.Unmarshal(payload, &args); err != nil {
-		return ToolResult{Success: false, Message: "invalid payload"}, fmt.Errorf("decode write file payload: %w", err)
+		return executor.ToolResult{Success: false, Message: "invalid payload"}, fmt.Errorf("decode write file payload: %w", err)
 	}
 
 	resolvedPath, err := t.resolvePath(args.Path)
 	if err != nil {
-		return ToolResult{Success: false, Message: err.Error()}, err
+		return executor.ToolResult{Success: false, Message: err.Error()}, err
 	}
 
 	if err := os.MkdirAll(filepath.Dir(resolvedPath), 0o755); err != nil {
-		return ToolResult{Success: false, Message: "failed to create parent directory"}, fmt.Errorf("create parent directories: %w", err)
+		return executor.ToolResult{Success: false, Message: "failed to create parent directory"}, fmt.Errorf("create parent directories: %w", err)
 	}
 
 	if err := os.WriteFile(resolvedPath, []byte(args.Content), 0o644); err != nil {
-		return ToolResult{Success: false, Message: "failed to write file"}, fmt.Errorf("write file: %w", err)
+		return executor.ToolResult{Success: false, Message: "failed to write file"}, fmt.Errorf("write file: %w", err)
 	}
 
 	ctx = ensureContext(ctx)
 	if args.OpenInEditor {
 		if output, runErr := t.runVSCodeCommand(ctx, t.workspace, "-r", resolvedPath); runErr != nil {
-			return ToolResult{Success: false, Message: stderrOrFallback(output, runErr)}, fmt.Errorf("open written file: %w", runErr)
+			return executor.ToolResult{Success: false, Message: stderrOrFallback(output, runErr)}, fmt.Errorf("open written file: %w", runErr)
 		}
 	}
 
-	return ToolResult{Success: true, Message: "file written", Data: map[string]interface{}{"path": resolvedPath}}, nil
+	return executor.ToolResult{Success: true, Message: "file written", Data: map[string]interface{}{"path": resolvedPath}}, nil
 }
 
-func (t *VSCodeTool) appendFile(ctx context.Context, payload json.RawMessage) (ToolResult, error) {
+func (t *VSCodeTool) appendFile(ctx context.Context, payload json.RawMessage) (executor.ToolResult, error) {
 	var args struct {
 		Path         string `json:"path"`
 		Content      string `json:"content"`
 		OpenInEditor bool   `json:"open_in_editor"`
 	}
 	if err := json.Unmarshal(payload, &args); err != nil {
-		return ToolResult{Success: false, Message: "invalid payload"}, fmt.Errorf("decode append file payload: %w", err)
+		return executor.ToolResult{Success: false, Message: "invalid payload"}, fmt.Errorf("decode append file payload: %w", err)
 	}
 
 	resolvedPath, err := t.resolvePath(args.Path)
 	if err != nil {
-		return ToolResult{Success: false, Message: err.Error()}, err
+		return executor.ToolResult{Success: false, Message: err.Error()}, err
 	}
 
 	if err := os.MkdirAll(filepath.Dir(resolvedPath), 0o755); err != nil {
-		return ToolResult{Success: false, Message: "failed to create parent directory"}, fmt.Errorf("create parent directories: %w", err)
+		return executor.ToolResult{Success: false, Message: "failed to create parent directory"}, fmt.Errorf("create parent directories: %w", err)
 	}
 
 	file, err := os.OpenFile(resolvedPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
-		return ToolResult{Success: false, Message: "failed to open file"}, fmt.Errorf("open file for append: %w", err)
+		return executor.ToolResult{Success: false, Message: "failed to open file"}, fmt.Errorf("open file for append: %w", err)
 	}
 	defer file.Close()
 
 	if _, err := file.WriteString(args.Content); err != nil {
-		return ToolResult{Success: false, Message: "failed to append text"}, fmt.Errorf("append content: %w", err)
+		return executor.ToolResult{Success: false, Message: "failed to append text"}, fmt.Errorf("append content: %w", err)
 	}
 
 	ctx = ensureContext(ctx)
 	if args.OpenInEditor {
 		if output, runErr := t.runVSCodeCommand(ctx, t.workspace, "-r", resolvedPath); runErr != nil {
-			return ToolResult{Success: false, Message: stderrOrFallback(output, runErr)}, fmt.Errorf("open appended file: %w", runErr)
+			return executor.ToolResult{Success: false, Message: stderrOrFallback(output, runErr)}, fmt.Errorf("open appended file: %w", runErr)
 		}
 	}
 
-	return ToolResult{Success: true, Message: "content appended", Data: map[string]interface{}{"path": resolvedPath}}, nil
+	return executor.ToolResult{Success: true, Message: "content appended", Data: map[string]interface{}{"path": resolvedPath}}, nil
 }
 
-func (t *VSCodeTool) executeCommand(ctx context.Context, payload json.RawMessage) (ToolResult, error) {
+func (t *VSCodeTool) executeCommand(ctx context.Context, payload json.RawMessage) (executor.ToolResult, error) {
 	var args struct {
 		Command string   `json:"command"`
 		Args    []string `json:"args"`
 	}
 	if err := json.Unmarshal(payload, &args); err != nil {
-		return ToolResult{Success: false, Message: "invalid payload"}, fmt.Errorf("decode command payload: %w", err)
+		return executor.ToolResult{Success: false, Message: "invalid payload"}, fmt.Errorf("decode command payload: %w", err)
 	}
 
 	if strings.TrimSpace(args.Command) == "" {
-		return ToolResult{Success: false, Message: "command is required"}, errors.New("missing command")
+		return executor.ToolResult{Success: false, Message: "command is required"}, errors.New("missing command")
 	}
 
 	ctx = ensureContext(ctx)
 	commandArgs := append([]string{t.workspace, "--command", args.Command}, args.Args...)
 	stdout, err := t.runVSCodeCommand(ctx, commandArgs...)
 	if err != nil {
-		return ToolResult{Success: false, Message: stderrOrFallback(stdout, err)}, fmt.Errorf("execute VS Code command: %w", err)
+		return executor.ToolResult{Success: false, Message: stderrOrFallback(stdout, err)}, fmt.Errorf("execute VS Code command: %w", err)
 	}
 
-	response := ToolResult{Success: true, Message: "command executed"}
+	response := executor.ToolResult{Success: true, Message: "command executed"}
 	if stdout != "" {
 		response.Data = map[string]interface{}{"output": stdout}
 	}
@@ -238,8 +240,8 @@ func stderrOrFallback(output string, err error) string {
 }
 
 // RegisterLifecycle registers VSCode tool with create/destroy/operation functions.
-func (t *VSCodeTool) RegisterLifecycle(exec Executor) error {
-	definitions := map[string]ToolDefinition{
+func (t *VSCodeTool) RegisterLifecycle(exec executor.Executor) error {
+	definitions := map[string]executor.ToolDefinition{
 		"create_vscode": {
 			Name:        "create_vscode",
 			Description: "Create VSCode instance with workspace",
@@ -352,29 +354,29 @@ func (t *VSCodeTool) RegisterLifecycle(exec Executor) error {
 	return exec.RegisterTool("vscode", definitions)
 }
 
-func (t *VSCodeTool) createVSCodeExecutor(exec Executor) ToolExecutor {
-	return func(ctx context.Context, payload json.RawMessage) (ToolResult, error) {
+func (t *VSCodeTool) createVSCodeExecutor(exec executor.Executor) executor.ToolExecutor {
+	return func(ctx context.Context, payload json.RawMessage) (executor.ToolResult, error) {
 		var args struct {
 			Workspace string `json:"workspace"`
 		}
 		if err := json.Unmarshal(payload, &args); err != nil {
-			return ToolResult{Success: false, Message: "invalid payload"}, err
+			return executor.ToolResult{Success: false, Message: "invalid payload"}, err
 		}
 
 		tool, err := NewVSCodeTool(args.Workspace)
 		if err != nil {
-			return ToolResult{Success: false, Message: err.Error()}, err
+			return executor.ToolResult{Success: false, Message: err.Error()}, err
 		}
 
 		ctx = ensureContext(ctx)
 		vsCmd := execCmd.CommandContext(ctx, tool.codePath, "--new-window", tool.workspace)
 		vsCmd.Env = os.Environ()
 		if err := vsCmd.Start(); err != nil {
-			return ToolResult{Success: false, Message: "failed to open workspace"}, fmt.Errorf("open workspace: %w", err)
+			return executor.ToolResult{Success: false, Message: "failed to open workspace"}, fmt.Errorf("open workspace: %w", err)
 		}
 
 		exec.StoreInstance("vscode", tool)
-		return ToolResult{
+		return executor.ToolResult{
 			Success: true,
 			Message: "VSCode instance created and workspace opened",
 			Data:    map[string]interface{}{"workspace": args.Workspace, "pid": vsCmd.Process.Pid},
@@ -382,22 +384,22 @@ func (t *VSCodeTool) createVSCodeExecutor(exec Executor) ToolExecutor {
 	}
 }
 
-func (t *VSCodeTool) destroyVSCodeExecutor(exec Executor) ToolExecutor {
-	return func(ctx context.Context, payload json.RawMessage) (ToolResult, error) {
+func (t *VSCodeTool) destroyVSCodeExecutor(exec executor.Executor) executor.ToolExecutor {
+	return func(ctx context.Context, payload json.RawMessage) (executor.ToolResult, error) {
 		_, err := t.getVSCodeInstance(exec)
 		if err != nil {
-			return ToolResult{Success: false, Message: err.Error()}, err
+			return executor.ToolResult{Success: false, Message: err.Error()}, err
 		}
 
 		exec.DeleteInstance("vscode")
-		return ToolResult{
+		return executor.ToolResult{
 			Success: true,
 			Message: "VSCode instance destroyed (window remains open, please close manually)",
 		}, nil
 	}
 }
 
-func (t *VSCodeTool) getVSCodeInstance(exec Executor) (*VSCodeTool, error) {
+func (t *VSCodeTool) getVSCodeInstance(exec executor.Executor) (*VSCodeTool, error) {
 	instance, ok := exec.LoadInstance("vscode")
 	if !ok {
 		return nil, fmt.Errorf("VSCode not created. Please call create_vscode first")
@@ -409,41 +411,41 @@ func (t *VSCodeTool) getVSCodeInstance(exec Executor) (*VSCodeTool, error) {
 	return tool, nil
 }
 
-func (t *VSCodeTool) vsCodeOpenFileExecutor(exec Executor) ToolExecutor {
-	return func(ctx context.Context, payload json.RawMessage) (ToolResult, error) {
+func (t *VSCodeTool) vsCodeOpenFileExecutor(exec executor.Executor) executor.ToolExecutor {
+	return func(ctx context.Context, payload json.RawMessage) (executor.ToolResult, error) {
 		tool, err := t.getVSCodeInstance(exec)
 		if err != nil {
-			return ToolResult{Success: false, Message: err.Error()}, err
+			return executor.ToolResult{Success: false, Message: err.Error()}, err
 		}
 		return tool.openFile(ctx, payload)
 	}
 }
 
-func (t *VSCodeTool) vsCodeWriteFileExecutor(exec Executor) ToolExecutor {
-	return func(ctx context.Context, payload json.RawMessage) (ToolResult, error) {
+func (t *VSCodeTool) vsCodeWriteFileExecutor(exec executor.Executor) executor.ToolExecutor {
+	return func(ctx context.Context, payload json.RawMessage) (executor.ToolResult, error) {
 		tool, err := t.getVSCodeInstance(exec)
 		if err != nil {
-			return ToolResult{Success: false, Message: err.Error()}, err
+			return executor.ToolResult{Success: false, Message: err.Error()}, err
 		}
 		return tool.writeFile(ctx, payload)
 	}
 }
 
-func (t *VSCodeTool) vsCodeAppendFileExecutor(exec Executor) ToolExecutor {
-	return func(ctx context.Context, payload json.RawMessage) (ToolResult, error) {
+func (t *VSCodeTool) vsCodeAppendFileExecutor(exec executor.Executor) executor.ToolExecutor {
+	return func(ctx context.Context, payload json.RawMessage) (executor.ToolResult, error) {
 		tool, err := t.getVSCodeInstance(exec)
 		if err != nil {
-			return ToolResult{Success: false, Message: err.Error()}, err
+			return executor.ToolResult{Success: false, Message: err.Error()}, err
 		}
 		return tool.appendFile(ctx, payload)
 	}
 }
 
-func (t *VSCodeTool) vsCodeExecuteCommandExecutor(exec Executor) ToolExecutor {
-	return func(ctx context.Context, payload json.RawMessage) (ToolResult, error) {
+func (t *VSCodeTool) vsCodeExecuteCommandExecutor(exec executor.Executor) executor.ToolExecutor {
+	return func(ctx context.Context, payload json.RawMessage) (executor.ToolResult, error) {
 		tool, err := t.getVSCodeInstance(exec)
 		if err != nil {
-			return ToolResult{Success: false, Message: err.Error()}, err
+			return executor.ToolResult{Success: false, Message: err.Error()}, err
 		}
 		return tool.executeCommand(ctx, payload)
 	}
@@ -451,7 +453,7 @@ func (t *VSCodeTool) vsCodeExecuteCommandExecutor(exec Executor) ToolExecutor {
 
 // RegisterVSCodeLifecycle registers VSCode tool with LLM-driven lifecycle management.
 // This is a convenience wrapper that creates a temporary VSCodeTool instance for registration.
-func RegisterVSCodeLifecycle(exec Executor) error {
+func RegisterVSCodeLifecycle(exec executor.Executor) error {
 	// Use a dummy workspace for registration - actual workspace will be set by create_vscode
 	tool := &VSCodeTool{}
 	return tool.RegisterLifecycle(exec)

@@ -1,4 +1,4 @@
-package executor
+package vscode
 
 import (
 	"context"
@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"ai-voice-ctrl/backend/executor"
 )
 
 func TestVSCodeHTTPToolIntegration(t *testing.T) {
@@ -204,7 +206,7 @@ func TestVSCodeHTTPToolRegistration(t *testing.T) {
 		t.Fatalf("failed to create tool: %v", err)
 	}
 
-	exec := NewDefaultExecutor()
+	exec := executor.NewDefaultExecutor()
 
 	// Test: Register lifecycle
 	if err := tool.RegisterHTTPLifecycle(exec); err != nil {
