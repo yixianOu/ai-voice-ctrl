@@ -4,3 +4,4 @@ frontend/dist
 .github/
 dev.fish
 setup.ps1
+token.json
