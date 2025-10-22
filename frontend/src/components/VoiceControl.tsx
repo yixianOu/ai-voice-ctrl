@@ -290,15 +290,14 @@ const VoiceControl: React.FC = () => {
           placeholder="输入命令或使用语音..."
           value={textInput}
           onChange={(e) => setTextInput(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && handleTextCommand()}
-          disabled={isProcessing}
+          onKeyPress={(e) => e.key === 'Enter' && !isProcessing && handleTextCommand()}
         />
         <button
           className="send-button"
           onClick={handleTextCommand}
           disabled={isProcessing || !textInput.trim()}
         >
-          发送
+          {isProcessing ? '处理中...' : '发送'}
         </button>
       </div>
 

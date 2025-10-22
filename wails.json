@@ -6,6 +6,8 @@
   "frontend:build": "pnpm run build",
   "frontend:dev:watcher": "pnpm run dev",
   "frontend:dev:serverUrl": "auto",
+  "debounceMS": 100,
+  "devServer": "localhost:5173",
   "author": {
     "name": "Orician",
     "email": "2018783812@qq.com"
