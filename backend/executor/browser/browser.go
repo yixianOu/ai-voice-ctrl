@@ -1,16 +1,17 @@
 package browser
 
 import (
-	"ai-voice-ctrl/backend/executor"
 	"context"
 	"encoding/json"
 	"fmt"
+
+	"ai-voice-ctrl/backend/executor"
 
 	"github.com/toqueteos/webbrowser"
 )
 
 const (
-	browserInstanceKey = "browser_session"
+	BrowserInstanceKey = "browser_session"
 )
 
 // browserSessionInstance 包装了浏览器会话的状态。
@@ -46,7 +47,7 @@ func RegisterBrowserTool(exec executor.Executor) error {
             }
         }`),
 		Executor: func(ctx context.Context, payload json.RawMessage) (executor.ToolResult, error) {
-			if _, ok := exec.LoadInstance(browserInstanceKey); ok {
+			if _, ok := exec.LoadInstance(BrowserInstanceKey); ok {
 				return executor.ToolResult{Success: true, Message: "浏览器会话已存在，无需重复创建。"}, nil
 			}
 
@@ -62,7 +63,7 @@ func RegisterBrowserTool(exec executor.Executor) error {
 			}
 
 			instance := &browserSessionInstance{BrowserName: browserName}
-			exec.StoreInstance(browserInstanceKey, instance)
+			exec.StoreInstance(BrowserInstanceKey, instance)
 
 			return executor.ToolResult{Success: true, Message: fmt.Sprintf("浏览器会话已创建，将使用 '%s' 浏览器。", browserName)}, nil
 		},
@@ -83,7 +84,7 @@ func RegisterBrowserTool(exec executor.Executor) error {
             "required": ["url"]
         }`),
 		Executor: func(ctx context.Context, payload json.RawMessage) (executor.ToolResult, error) {
-			instance, ok := exec.LoadInstance(browserInstanceKey)
+			instance, ok := exec.LoadInstance(BrowserInstanceKey)
 			if !ok {
 				return executor.ToolResult{Success: false, Message: "错误：浏览器会话不存在。请先调用 create_browser_session。"}, nil
 			}
@@ -114,7 +115,7 @@ func RegisterBrowserTool(exec executor.Executor) error {
 		Description: "销毁并清理当前的浏览器会话。",
 		Parameters:  json.RawMessage(`{"type": "object", "properties": {}}`),
 		Executor: func(ctx context.Context, payload json.RawMessage) (executor.ToolResult, error) {
-			exec.DeleteInstance(browserInstanceKey)
+			exec.DeleteInstance(BrowserInstanceKey)
 			return executor.ToolResult{Success: true, Message: "浏览器会话已销毁。"}, nil
 		},
 	}

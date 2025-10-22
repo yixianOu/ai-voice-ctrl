@@ -15,6 +15,8 @@ import (
 	"ai-voice-ctrl/backend/executor"
 )
 
+const Vscode = "vscode"
+
 // VSCodeTool 封装 VS Code 的 HTTP Bridge 操作。
 type VSCodeTool struct {
 	workspace  string
@@ -369,7 +371,7 @@ func (t *VSCodeTool) createVSCodeExecutor(exec executor.Executor) executor.ToolE
 
 		time.Sleep(10 * time.Second)
 
-		exec.StoreInstance("vscode", tool)
+		exec.StoreInstance(Vscode, tool)
 		return executor.ToolResult{
 			Success: true,
 			Message: "VSCode instance created and workspace opened",

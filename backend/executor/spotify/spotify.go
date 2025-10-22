@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	spotifyInstanceName = "spotify_client"
+	SpotifyInstanceName = "spotify_client"
 	tokenFilePath       = "token.json"
 	redirectURI         = "http://127.0.0.1:20721/callback" // 除了端口外均不可改动
 	localServerAddr     = "127.0.0.1:20721"                 // 与上方保持一致
@@ -42,7 +42,7 @@ func RegisterSpotifyTool(exec executor.Executor) error {
 		Parameters:  json.RawMessage(`{"type": "object", "properties": {}}`), // 无参数
 		Executor: func(ctx context.Context, payload json.RawMessage) (executor.ToolResult, error) {
 			// 检查实例是否已存在
-			if _, ok := exec.LoadInstance(spotifyInstanceName); ok {
+			if _, ok := exec.LoadInstance(SpotifyInstanceName); ok {
 				return executor.ToolResult{Success: true, Message: "Spotify 客户端已存在，无需重复创建。"}, nil
 			}
 
@@ -54,7 +54,7 @@ func RegisterSpotifyTool(exec executor.Executor) error {
 
 			// 存储实例
 			instance := &spotifyClientInstance{Client: client}
-			exec.StoreInstance(spotifyInstanceName, instance)
+			exec.StoreInstance(SpotifyInstanceName, instance)
 
 			return executor.ToolResult{Success: true, Message: "Spotify 客户端创建并验证成功。"}, nil
 		},
@@ -76,7 +76,7 @@ func RegisterSpotifyTool(exec executor.Executor) error {
         }`),
 		Executor: func(ctx context.Context, payload json.RawMessage) (executor.ToolResult, error) {
 			// 加载实例
-			instance, ok := exec.LoadInstance(spotifyInstanceName)
+			instance, ok := exec.LoadInstance(SpotifyInstanceName)
 			if !ok {
 				return executor.ToolResult{Success: false, Message: "错误：Spotify 客户端不存在。请先调用 create_spotify_client。"}, nil
 			}
@@ -123,7 +123,7 @@ func RegisterSpotifyTool(exec executor.Executor) error {
 		Description: "销毁并清理当前的 Spotify 客户端会话。",
 		Parameters:  json.RawMessage(`{"type": "object", "properties": {}}`),
 		Executor: func(ctx context.Context, payload json.RawMessage) (executor.ToolResult, error) {
-			exec.DeleteInstance(spotifyInstanceName)
+			exec.DeleteInstance(SpotifyInstanceName)
 			return executor.ToolResult{Success: true, Message: "Spotify 客户端会话已销毁。"}, nil
 		},
 	}

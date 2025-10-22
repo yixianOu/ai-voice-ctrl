@@ -73,7 +73,7 @@ func (a *App) shutdown(ctx context.Context) {
 	// Clean up executor instances (VSCode, Spotify, etc.)
 	if a.executor != nil {
 		// Try to close VSCode instance if exists
-		if _, ok := a.executor.LoadInstance("vscode"); ok {
+		if _, ok := a.executor.LoadInstance(vscode.Vscode); ok {
 			destroyCall := executor.ToolCall{
 				Name:      "destroy_vscode",
 				Arguments: []byte(`{}`),
@@ -82,9 +82,17 @@ func (a *App) shutdown(ctx context.Context) {
 		}
 
 		// Try to stop Spotify server if exists
-		if _, ok := a.executor.LoadInstance("spotify_server"); ok {
+		if _, ok := a.executor.LoadInstance(spotify.SpotifyInstanceName); ok {
 			stopCall := executor.ToolCall{
 				Name:      "spotify_stop_server",
+				Arguments: []byte(`{}`),
+			}
+			a.executor.ExecuteTool(ctx, stopCall)
+		}
+		// Try to close browser session if exists
+		if _, ok := a.executor.LoadInstance(browser.BrowserInstanceKey); ok {
+			stopCall := executor.ToolCall{
+				Name:      "destroy_browser_session",
 				Arguments: []byte(`{}`),
 			}
 			a.executor.ExecuteTool(ctx, stopCall)
