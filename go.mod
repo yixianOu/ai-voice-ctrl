@@ -6,6 +6,7 @@ require (
 	github.com/gen2brain/malgo v0.11.24
 	github.com/openai/openai-go/v2 v2.7.1
 	github.com/sashabaranov/go-openai v1.41.2
+	github.com/toqueteos/webbrowser v1.2.1
 	github.com/wailsapp/wails/v2 v2.10.2
 	github.com/zmb3/spotify/v2 v2.4.3
 	golang.org/x/oauth2 v0.32.0
@@ -35,7 +36,6 @@ require (
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.2.5 // indirect
 	github.com/tkrajina/go-reflector v0.5.8 // indirect
-	github.com/toqueteos/webbrowser v1.2.1 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/wailsapp/go-webview2 v1.0.19 // indirect

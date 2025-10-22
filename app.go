@@ -242,7 +242,17 @@ func (a *App) IsRecording() bool {
 // ==================== Configuration Methods ====================
 
 // SetAPIKey updates the OpenAI API key
+// If apiKey is empty, it reads from OPENAI_API_KEY environment variable
 func (a *App) SetAPIKey(apiKey string) {
+	// If no key provided, try to get from environment
+	if apiKey == "" {
+		apiKey = os.Getenv("OPENAI_API_KEY")
+		if apiKey == "" {
+			fmt.Println("Warning: No API key provided and OPENAI_API_KEY environment variable is not set")
+			return
+		}
+	}
+
 	// Update ASR service
 	newASR := openaillms.NewOpenAIASR(apiKey)
 	a.audioHandler.SetASRService(newASR)
@@ -250,6 +260,8 @@ func (a *App) SetAPIKey(apiKey string) {
 	// Recreate agent with new API key
 	a.agent = openaillms.NewOpenAIAgent(apiKey, a.executor)
 	a.commandHandler = handler.NewCommandHandler(a.audioHandler, a.agent)
+
+	fmt.Println("OpenAI API key updated successfully")
 }
 
 // ==================== Tool Management Methods ====================
