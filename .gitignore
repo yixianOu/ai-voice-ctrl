@@ -2,3 +2,5 @@ build/
 node_modules
 frontend/dist
 .github/
+dev.fish
+setup.ps1
