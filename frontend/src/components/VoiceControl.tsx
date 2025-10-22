@@ -6,7 +6,8 @@ import {
   IsRecording,
   GetConversationHistory,
   ResetConversation,
-  GetAvailableTools
+  GetAvailableTools,
+  SetAPIKey
 } from '../../wailsjs/go/main/App';
 import { llms } from '../../wailsjs/go/models';
 import './VoiceControl.css';
@@ -20,11 +21,36 @@ const VoiceControl: React.FC = () => {
   const [conversationHistory, setConversationHistory] = useState<llms.Message[]>([]);
   const [availableTools, setAvailableTools] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [apiKey, setApiKeyInput] = useState<string>('');
+  const [showHistory, setShowHistory] = useState(false);
 
   // Load available tools on mount
   useEffect(() => {
     loadAvailableTools();
   }, []);
+
+  // Poll recording status
+  useEffect(() => {
+    const checkRecordingStatus = async () => {
+      try {
+        const recording = await IsRecording();
+        setIsRecording(recording);
+      } catch (err) {
+        // Ignore errors during polling
+      }
+    };
+
+    // Check recording status every 500ms when processing
+    let interval: number | null = null;
+    if (isProcessing) {
+      interval = window.setInterval(checkRecordingStatus, 500);
+    }
+
+    return () => {
+      if (interval !== null) window.clearInterval(interval);
+    };
+  }, [isProcessing]);
 
   const loadAvailableTools = async () => {
     try {
@@ -40,13 +66,13 @@ const VoiceControl: React.FC = () => {
     try {
       setError('');
       setIsProcessing(true);
-      setIsRecording(true);
       
       // This will: record -> transcribe -> LLM -> execute tools
       const result = await ProcessVoiceCommandAuto();
       
       setIsRecording(false);
       setResponse(result);
+      setShowHistory(true);
       await loadConversationHistory();
     } catch (err) {
       console.error('Voice command failed:', err);
@@ -68,6 +94,7 @@ const VoiceControl: React.FC = () => {
       const result = await ProcessVoiceCommand(textInput);
       setResponse(result);
       setTextInput('');
+      setShowHistory(true);
       await loadConversationHistory();
     } catch (err) {
       console.error('Text command failed:', err);
@@ -82,7 +109,6 @@ const VoiceControl: React.FC = () => {
     try {
       setError('');
       setIsProcessing(true);
-      setIsRecording(true);
       
       const text = await RecordAndTranscribe();
       
@@ -114,9 +140,41 @@ const VoiceControl: React.FC = () => {
       setResponse('');
       setTranscript('');
       setError('');
+      setShowHistory(false);
     } catch (err) {
       console.error('Failed to reset:', err);
       setError(`重置失败: ${err}`);
+    }
+  };
+
+  const handleSaveAPIKey = async () => {
+    try {
+      await SetAPIKey(apiKey);
+      setShowSettings(false);
+      setApiKeyInput('');
+      setError('');
+    } catch (err) {
+      console.error('Failed to set API key:', err);
+      setError(`设置API Key失败: ${err}`);
+    }
+  };
+
+  const handleQuickCommand = async (command: string) => {
+    setTextInput(command);
+    // Auto-execute
+    try {
+      setError('');
+      setIsProcessing(true);
+      
+      const result = await ProcessVoiceCommand(command);
+      setResponse(result);
+      setShowHistory(true);
+      await loadConversationHistory();
+    } catch (err) {
+      console.error('Quick command failed:', err);
+      setError(`命令执行失败: ${err}`);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -147,7 +205,36 @@ const VoiceControl: React.FC = () => {
 
   return (
     <div className="voice-control">
-      <h2>🎤 AI 语音助手</h2>
+      <div className="header">
+        <h2>🎤 AI 语音助手</h2>
+        <button 
+          className="settings-button"
+          onClick={() => setShowSettings(!showSettings)}
+          title="设置"
+        >
+          ⚙️
+        </button>
+      </div>
+
+      {/* Settings Panel */}
+      {showSettings && (
+        <div className="settings-panel">
+          <h3>⚙️ 设置</h3>
+          <div className="setting-item">
+            <label>OpenAI API Key:</label>
+            <input
+              type="password"
+              className="api-key-input"
+              placeholder="留空则使用环境变量"
+              value={apiKey}
+              onChange={(e) => setApiKeyInput(e.target.value)}
+            />
+            <button className="save-button" onClick={handleSaveAPIKey}>
+              保存
+            </button>
+          </div>
+        </div>
+      )}
       
       {/* Main Control Buttons */}
       <div className="control-buttons">
@@ -156,7 +243,7 @@ const VoiceControl: React.FC = () => {
           onClick={handleVoiceCommand}
           disabled={isProcessing}
         >
-          {isRecording ? '🔴 录音中...' : '🎤 语音命令（自动执行）'}
+          {isRecording ? '🔴 录音中...' : '🎤 语音命令'}
         </button>
         
         <button
@@ -164,7 +251,7 @@ const VoiceControl: React.FC = () => {
           onClick={handleTranscribeOnly}
           disabled={isProcessing}
         >
-          📝 仅转录（不执行）
+          📝 仅转录
         </button>
       </div>
 
@@ -173,7 +260,7 @@ const VoiceControl: React.FC = () => {
         <input
           type="text"
           className="text-input"
-          placeholder="输入文本命令..."
+          placeholder="输入命令或使用语音..."
           value={textInput}
           onChange={(e) => setTextInput(e.target.value)}
           onKeyPress={(e) => e.key === 'Enter' && handleTextCommand()}
@@ -188,18 +275,39 @@ const VoiceControl: React.FC = () => {
         </button>
       </div>
 
+      {/* Quick Commands */}
+      <div className="quick-commands">
+        <button onClick={() => handleQuickCommand('创建VSCode工作区 /tmp/demo')}>
+          📁 创建工作区
+        </button>
+        <button onClick={() => handleQuickCommand('打开文件 README.md')}>
+          📄 打开文件
+        </button>
+        <button onClick={() => handleQuickCommand('打开浏览器访问 https://github.com')}>
+          🌐 打开网页
+        </button>
+      </div>
+
       {/* Processing Status */}
       {isProcessing && (
         <div className="processing-status">
           <div className="spinner"></div>
-          <span>处理中...</span>
+          <span>{isRecording ? '🎤 正在录音...' : '⚙️ 处理中...'}</span>
+        </div>
+      )}
+
+      {/* Recording Status Badge */}
+      {isRecording && !isProcessing && (
+        <div className="recording-badge">
+          <div className="recording-pulse"></div>
+          <span>🔴 录音中</span>
         </div>
       )}
 
       {/* Transcript Display */}
       {transcript && (
         <div className="transcript-box">
-          <h3>📝 转录文本：</h3>
+          <h3>📝 转录文本</h3>
           <p>{transcript}</p>
         </div>
       )}
@@ -207,7 +315,7 @@ const VoiceControl: React.FC = () => {
       {/* Response Display */}
       {response && (
         <div className="response-box">
-          <h3>🤖 助手响应：</h3>
+          <h3>🤖 助手响应</h3>
           <p>{response}</p>
         </div>
       )}
@@ -219,15 +327,21 @@ const VoiceControl: React.FC = () => {
         </div>
       )}
 
-      {/* Conversation History */}
+      {/* Conversation History Toggle */}
       {conversationHistory.length > 0 && (
+        <div className="history-toggle">
+          <button onClick={() => setShowHistory(!showHistory)}>
+            {showHistory ? '▼ 隐藏对话历史' : '▶ 显示对话历史'} ({conversationHistory.length})
+          </button>
+          <button className="reset-button" onClick={handleResetConversation}>
+            🔄 重置对话
+          </button>
+        </div>
+      )}
+
+      {/* Conversation History */}
+      {showHistory && conversationHistory.length > 0 && (
         <div className="history-container">
-          <div className="history-header">
-            <h3>💬 对话历史</h3>
-            <button className="reset-button" onClick={handleResetConversation}>
-              🔄 重置
-            </button>
-          </div>
           <div className="history-messages">
             {conversationHistory.map((msg, index) => renderMessage(msg, index))}
           </div>
@@ -235,25 +349,23 @@ const VoiceControl: React.FC = () => {
       )}
 
       {/* Available Tools */}
-      {availableTools.length > 0 && (
-        <div className="tools-container">
-          <h3>🔧 可用工具 ({availableTools.length})</h3>
-          <div className="tools-list">
-            {availableTools.map((tool, index) => (
-              <span key={index} className="tool-tag">{tool}</span>
-            ))}
-          </div>
+      <div className="tools-container">
+        <h3>🔧 可用工具 ({availableTools.length})</h3>
+        <div className="tools-list">
+          {availableTools.map((tool, index) => (
+            <span key={index} className="tool-tag">{tool}</span>
+          ))}
         </div>
-      )}
+      </div>
 
       {/* Usage Tips */}
       <div className="tips">
-        <h3>💡 使用提示：</h3>
+        <h3>💡 使用提示</h3>
         <ul>
-          <li><strong>语音命令（自动执行）</strong>：录音 → 转录 → LLM分析 → 自动调用工具</li>
-          <li><strong>仅转录</strong>：录音 → 转录到文本框，可手动编辑后发送</li>
-          <li><strong>文本输入</strong>：直接输入命令文本，LLM自动调用工具</li>
-          <li>示例命令：「创建VSCode工作区 /tmp/test」、「打开hello.md文件」</li>
+          <li><strong>语音命令</strong>：点击🎤按钮 → 说话 → 自动转录并执行</li>
+          <li><strong>仅转录</strong>：录音后转为文字，可编辑后再发送</li>
+          <li><strong>文本输入</strong>：直接输入命令文本执行</li>
+          <li><strong>快捷命令</strong>：点击预设按钮快速执行常用命令</li>
         </ul>
       </div>
     </div>

@@ -25,8 +25,11 @@ type App struct {
 
 // NewApp creates a new App application struct
 func NewApp() *App {
-	// Get API key from environment variable
+	// Get API key from environment variable (can be empty initially)
 	apiKey := os.Getenv("OPENAI_API_KEY")
+	if apiKey == "" {
+		fmt.Println("Warning: OPENAI_API_KEY not set. Please configure API key before using LLM features.")
+	}
 
 	// Initialize executor and register tools
 	exec := executor.NewDefaultExecutor()
@@ -40,10 +43,10 @@ func NewApp() *App {
 		fmt.Printf("Warning: Failed to register Browser tools: %v\n", err)
 	}
 
-	// Initialize agent with executor
+	// Initialize agent with executor (even if apiKey is empty, can be set later)
 	agent := openaillms.NewOpenAIAgent(apiKey, exec)
 
-	// Initialize audio handler
+	// Initialize audio handler (ASR also needs API key, but can be set later)
 	audioHandler := handler.NewAudioHandler(apiKey)
 
 	// Initialize command handler
