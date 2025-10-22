@@ -1,7 +1,8 @@
 # AI Voice Control
 
 团队： ai-voice-ctrl
-成员： Ouyixian(2018783812@qq.com)
+成员： 
+    - Ouyixian(2018783812@qq.com): 后端+前端
 
 > 🎙️ 基于大模型的语音控制桌面应用 | 让AI成为你的操作系统助手
 ## 💡 产品愿景
