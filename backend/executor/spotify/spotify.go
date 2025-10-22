@@ -144,10 +144,8 @@ func RegisterSpotifyTool(exec executor.Executor) error {
 // getAuthenticatedClient 处理 OAuth 流程并返回一个可用的客户端
 func getAuthenticatedClient(ctx context.Context) (*spotify.Client, error) {
 	// 从环境变量或安全存储中获取
-	// clientID := os.Getenv("SPOTIFY_ID")
-	// clientSecret := os.Getenv("SPOTIFY_SECRET")
-	clientID := "577ac022b7a2428a9d2ab5f4058d47a8"
-	clientSecret := "78e782b341b14dd3a9da54a5516109e0"
+	clientID := os.Getenv("SPOTIFY_ID")
+	clientSecret := os.Getenv("SPOTIFY_SECRET")
 	if clientID == "" || clientSecret == "" {
 		return nil, fmt.Errorf("环境变量 SPOTIFY_ID 或 SPOTIFY_SECRET 未设置")
 	}

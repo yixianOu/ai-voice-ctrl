@@ -67,16 +67,38 @@ func (t *VSCodeTool) openFile(ctx context.Context, payload json.RawMessage) (exe
 		return executor.ToolResult{Success: false, Message: err.Error()}, err
 	}
 
+	// Check if file exists, create if not
+	fileCreated := false
 	if _, err := os.Stat(resolvedPath); os.IsNotExist(err) {
+		// Create parent directories
 		if err := os.MkdirAll(filepath.Dir(resolvedPath), 0o755); err != nil {
 			return executor.ToolResult{Success: false, Message: "failed to create parent directory"}, fmt.Errorf("create parent directories: %w", err)
 		}
-		if err := os.WriteFile(resolvedPath, []byte(""), 0o644); err != nil {
+
+		// Create empty file with proper newline
+		if err := os.WriteFile(resolvedPath, []byte("\n"), 0o644); err != nil {
 			return executor.ToolResult{Success: false, Message: "failed to create file"}, fmt.Errorf("create file: %w", err)
 		}
+		fileCreated = true
 	}
 
-	return t.httpBridge.openFile(ctx, payload)
+	// Open file in VSCode
+	result, err := t.httpBridge.openFile(ctx, payload)
+	if err != nil {
+		return result, err
+	}
+
+	// Add file creation info to result
+	if fileCreated {
+		if result.Data == nil {
+			result.Data = make(map[string]interface{})
+		}
+		result.Data["file_created"] = true
+		result.Data["path"] = resolvedPath
+		result.Message = fmt.Sprintf("file created and opened: %s", args.Path)
+	}
+
+	return result, nil
 }
 
 func (t *VSCodeTool) writeFile(ctx context.Context, payload json.RawMessage) (executor.ToolResult, error) {
@@ -94,20 +116,54 @@ func (t *VSCodeTool) writeFile(ctx context.Context, payload json.RawMessage) (ex
 		return executor.ToolResult{Success: false, Message: err.Error()}, err
 	}
 
+	// Create parent directories if needed
 	if err := os.MkdirAll(filepath.Dir(resolvedPath), 0o755); err != nil {
 		return executor.ToolResult{Success: false, Message: "failed to create parent directory"}, fmt.Errorf("create parent directories: %w", err)
+	}
+
+	// Write file content
+	fileExisted := true
+	if _, err := os.Stat(resolvedPath); os.IsNotExist(err) {
+		fileExisted = false
 	}
 
 	if err := os.WriteFile(resolvedPath, []byte(args.Content), 0o644); err != nil {
 		return executor.ToolResult{Success: false, Message: "failed to write file"}, fmt.Errorf("write file: %w", err)
 	}
 
-	if args.OpenInEditor {
-		openPayload, _ := json.Marshal(map[string]interface{}{"path": args.Path})
-		return t.httpBridge.openFile(ctx, openPayload)
+	resultData := map[string]interface{}{
+		"path":          resolvedPath,
+		"file_created":  !fileExisted,
+		"bytes_written": len(args.Content),
 	}
 
-	return executor.ToolResult{Success: true, Message: "file written", Data: map[string]interface{}{"path": resolvedPath}}, nil
+	// Open in editor if requested
+	if args.OpenInEditor {
+		openPayload, _ := json.Marshal(map[string]interface{}{"path": args.Path})
+		result, err := t.httpBridge.openFile(ctx, openPayload)
+		if err != nil {
+			return executor.ToolResult{Success: false, Message: err.Error()}, err
+		}
+		// Merge data
+		for k, v := range resultData {
+			if result.Data == nil {
+				result.Data = make(map[string]interface{})
+			}
+			result.Data[k] = v
+		}
+		return result, nil
+	}
+
+	message := "file written"
+	if !fileExisted {
+		message = "file created and written"
+	}
+
+	return executor.ToolResult{
+		Success: true,
+		Message: message,
+		Data:    resultData,
+	}, nil
 }
 
 func (t *VSCodeTool) appendFile(ctx context.Context, payload json.RawMessage) (executor.ToolResult, error) {
@@ -125,30 +181,63 @@ func (t *VSCodeTool) appendFile(ctx context.Context, payload json.RawMessage) (e
 		return executor.ToolResult{Success: false, Message: err.Error()}, err
 	}
 
+	// Create parent directories if needed
 	if err = os.MkdirAll(filepath.Dir(resolvedPath), 0o755); err != nil {
 		return executor.ToolResult{Success: false, Message: "failed to create parent directory"}, fmt.Errorf("create parent directories: %w", err)
 	}
 
+	// Check if file exists
+	fileExisted := true
+	if _, err := os.Stat(resolvedPath); os.IsNotExist(err) {
+		fileExisted = false
+	}
+
+	// Open file for appending (creates if not exists)
 	file, err := os.OpenFile(resolvedPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return executor.ToolResult{Success: false, Message: "failed to open file"}, fmt.Errorf("open file for append: %w", err)
 	}
 	defer file.Close()
 
-	if _, err := file.WriteString(args.Content); err != nil {
+	// Append content
+	bytesWritten, err := file.WriteString(args.Content)
+	if err != nil {
 		return executor.ToolResult{Success: false, Message: "failed to append text"}, fmt.Errorf("append content: %w", err)
 	}
 
-	if args.OpenInEditor {
-		openPayload, _ := json.Marshal(map[string]interface{}{"path": args.Path})
-		if result, err := t.httpBridge.openFile(ctx, openPayload); err != nil {
-			return executor.ToolResult{Success: false, Message: err.Error()}, err
-		} else {
-			return result, nil
-		}
+	resultData := map[string]interface{}{
+		"path":          resolvedPath,
+		"file_created":  !fileExisted,
+		"bytes_written": bytesWritten,
 	}
 
-	return executor.ToolResult{Success: true, Message: "content appended", Data: map[string]interface{}{"path": resolvedPath}}, nil
+	// Open in editor if requested
+	if args.OpenInEditor {
+		openPayload, _ := json.Marshal(map[string]interface{}{"path": args.Path})
+		result, err := t.httpBridge.openFile(ctx, openPayload)
+		if err != nil {
+			return executor.ToolResult{Success: false, Message: err.Error()}, err
+		}
+		// Merge data
+		for k, v := range resultData {
+			if result.Data == nil {
+				result.Data = make(map[string]interface{})
+			}
+			result.Data[k] = v
+		}
+		return result, nil
+	}
+
+	message := "content appended"
+	if !fileExisted {
+		message = "file created and content appended"
+	}
+
+	return executor.ToolResult{
+		Success: true,
+		Message: message,
+		Data:    resultData,
+	}, nil
 }
 
 func (t *VSCodeTool) executeCommand(ctx context.Context, payload json.RawMessage) (executor.ToolResult, error) {
