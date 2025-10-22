@@ -34,10 +34,13 @@ const VoiceControl: React.FC = () => {
     loadAvailableTools();
   }, []);
 
-  // Poll recording status
+  // Poll recording status continuously while component is mounted.
+  // This keeps the UI updated with backend recording state for live reminders.
   useEffect(() => {
     const maxErrors = 5;
-    
+    const restartDelayMs = 5000;
+    let restartTimeout: number | null = null;
+
     const checkRecordingStatus = async () => {
       try {
         const recording = await IsRecording();
@@ -46,24 +49,27 @@ const VoiceControl: React.FC = () => {
       } catch (err) {
         errorCountRef.current++;
         console.warn(`Recording status check failed (${errorCountRef.current}/${maxErrors}):`, err);
-        // Stop polling if too many consecutive errors
+        // Stop polling temporarily if too many consecutive errors
         if (errorCountRef.current >= maxErrors && pollingIntervalRef.current !== null) {
-          console.error('Too many errors checking recording status, stopping poll');
+          console.error('Too many errors checking recording status, stopping poll temporarily');
           window.clearInterval(pollingIntervalRef.current);
           pollingIntervalRef.current = null;
           setIsRecording(false);
-          setIsProcessing(false); // Also reset processing state
+          // Try to restart polling after a backoff
+          restartTimeout = window.setTimeout(() => {
+            errorCountRef.current = 0;
+            if (pollingIntervalRef.current === null) {
+              pollingIntervalRef.current = window.setInterval(checkRecordingStatus, 300);
+            }
+          }, restartDelayMs);
         }
       }
     };
 
-    // Start polling when processing, stop when not processing
-    if (isProcessing && pollingIntervalRef.current === null) {
-      errorCountRef.current = 0; // Reset error count when starting
+    // start immediate check + interval
+    checkRecordingStatus();
+    if (pollingIntervalRef.current === null) {
       pollingIntervalRef.current = window.setInterval(checkRecordingStatus, 300);
-    } else if (!isProcessing && pollingIntervalRef.current !== null) {
-      window.clearInterval(pollingIntervalRef.current);
-      pollingIntervalRef.current = null;
     }
 
     return () => {
@@ -71,8 +77,12 @@ const VoiceControl: React.FC = () => {
         window.clearInterval(pollingIntervalRef.current);
         pollingIntervalRef.current = null;
       }
+      if (restartTimeout !== null) {
+        window.clearTimeout(restartTimeout);
+        restartTimeout = null;
+      }
     };
-  }, [isProcessing]);
+  }, []);
 
   const loadAvailableTools = async () => {
     try {
@@ -134,23 +144,28 @@ const VoiceControl: React.FC = () => {
   const handleTranscribeOnly = async () => {
     try {
       setError('');
-      setIsProcessing(true);
       setTranscript(''); // Clear previous transcript
+      setIsProcessing(true);
       
       const text = await RecordAndTranscribe();
       
+      // Ensure processing state is cleared before setting text input
+      setIsProcessing(false);
       setIsRecording(false);
       setTextInput(text); // Fill into text input for editing
-      // Focus text input after transcription
+      
+      // Focus text input after state updates
       setTimeout(() => {
         const input = document.querySelector('.text-input') as HTMLInputElement;
-        if (input) input.focus();
-      }, 100);
+        if (input) {
+          input.focus();
+          input.select(); // Select all text for easy editing
+        }
+      }, 150);
     } catch (err) {
       console.error('Transcription failed:', err);
       setError(`转录失败: ${err}`);
       setIsRecording(false);
-    } finally {
       setIsProcessing(false);
     }
   };
@@ -187,26 +202,6 @@ const VoiceControl: React.FC = () => {
     } catch (err) {
       console.error('Failed to set API key:', err);
       setError(`设置API Key失败: ${err}`);
-    }
-  };
-
-  const handleQuickCommand = async (command: string) => {
-    try {
-      setError('');
-      setResponse(''); // Clear previous response
-      setTextInput(command); // Show command being executed
-      setIsProcessing(true);
-      
-      const result = await ProcessTextCommand(command);
-      setResponse(result);
-      setTextInput(''); // Clear after success
-      setShowHistory(true);
-      await loadConversationHistory();
-    } catch (err) {
-      console.error('Quick command failed:', err);
-      setError(`命令执行失败: ${err}`);
-    } finally {
-      setIsProcessing(false);
     }
   };
 
@@ -307,19 +302,6 @@ const VoiceControl: React.FC = () => {
         </button>
       </div>
 
-      {/* Quick Commands */}
-      <div className="quick-commands">
-        <button onClick={() => handleQuickCommand('创建VSCode工作区 /tmp/demo')}>
-          📁 创建工作区
-        </button>
-        <button onClick={() => handleQuickCommand('打开文件 README.md')}>
-          📄 打开文件
-        </button>
-        <button onClick={() => handleQuickCommand('打开浏览器访问 https://github.com')}>
-          🌐 打开网页
-        </button>
-      </div>
-
       {/* Processing Status */}
       {isProcessing && (
         <div className="processing-status">
@@ -328,8 +310,8 @@ const VoiceControl: React.FC = () => {
         </div>
       )}
 
-      {/* Recording Status Badge */}
-      {isRecording && !isProcessing && (
+      {/* Recording Status Badge - Always show when recording */}
+      {isRecording && (
         <div className="recording-badge">
           <div className="recording-pulse"></div>
           <span>🔴 录音中</span>
