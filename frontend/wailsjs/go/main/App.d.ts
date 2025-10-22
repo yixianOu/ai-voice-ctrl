@@ -10,6 +10,8 @@ export function GetToolDescription(arg1:string):Promise<string>;
 
 export function IsRecording():Promise<boolean>;
 
+export function ProcessTextCommand(arg1:string):Promise<string>;
+
 export function ProcessVoiceCommand(arg1:string):Promise<string>;
 
 export function ProcessVoiceCommandAuto():Promise<string>;

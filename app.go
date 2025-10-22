@@ -106,9 +106,9 @@ func (a *App) shutdown(ctx context.Context) {
 // ==================== LLM Command Processing Methods ====================
 
 // ProcessTextCommand processes text command with LLM and tool execution
-// func (a *App) ProcessTextCommand(text string) (string, error) {
-// 	return a.commandHandler.ProcessTextCommand(a.ctx, text)
-// }
+func (a *App) ProcessTextCommand(text string) (string, error) {
+	return a.commandHandler.ProcessTextCommand(a.ctx, text)
+}
 
 // ProcessVoiceCommandAuto records audio with VAD, transcribes, and processes with LLM
 func (a *App) ProcessVoiceCommandAuto() (string, error) {

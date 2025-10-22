@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   ProcessVoiceCommandAuto, 
-  ProcessVoiceCommand,
+  ProcessTextCommand,
   RecordAndTranscribe,
   IsRecording,
   GetConversationHistory,
@@ -24,6 +24,10 @@ const VoiceControl: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [apiKey, setApiKeyInput] = useState<string>('');
   const [showHistory, setShowHistory] = useState(false);
+  
+  // Use ref to track interval for recording status polling
+  const pollingIntervalRef = useRef<number | null>(null);
+  const errorCountRef = useRef<number>(0);
 
   // Load available tools on mount
   useEffect(() => {
@@ -32,23 +36,41 @@ const VoiceControl: React.FC = () => {
 
   // Poll recording status
   useEffect(() => {
+    const maxErrors = 5;
+    
     const checkRecordingStatus = async () => {
       try {
         const recording = await IsRecording();
         setIsRecording(recording);
+        errorCountRef.current = 0; // Reset error count on success
       } catch (err) {
-        // Ignore errors during polling
+        errorCountRef.current++;
+        console.warn(`Recording status check failed (${errorCountRef.current}/${maxErrors}):`, err);
+        // Stop polling if too many consecutive errors
+        if (errorCountRef.current >= maxErrors && pollingIntervalRef.current !== null) {
+          console.error('Too many errors checking recording status, stopping poll');
+          window.clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+          setIsRecording(false);
+          setIsProcessing(false); // Also reset processing state
+        }
       }
     };
 
-    // Check recording status every 500ms when processing
-    let interval: number | null = null;
-    if (isProcessing) {
-      interval = window.setInterval(checkRecordingStatus, 500);
+    // Start polling when processing, stop when not processing
+    if (isProcessing && pollingIntervalRef.current === null) {
+      errorCountRef.current = 0; // Reset error count when starting
+      pollingIntervalRef.current = window.setInterval(checkRecordingStatus, 300);
+    } else if (!isProcessing && pollingIntervalRef.current !== null) {
+      window.clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
     }
 
     return () => {
-      if (interval !== null) window.clearInterval(interval);
+      if (pollingIntervalRef.current !== null) {
+        window.clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
     };
   }, [isProcessing]);
 
@@ -65,20 +87,20 @@ const VoiceControl: React.FC = () => {
   const handleVoiceCommand = async () => {
     try {
       setError('');
+      setResponse(''); // Clear previous response
       setIsProcessing(true);
       
       // This will: record -> transcribe -> LLM -> execute tools
       const result = await ProcessVoiceCommandAuto();
       
-      setIsRecording(false);
       setResponse(result);
       setShowHistory(true);
       await loadConversationHistory();
     } catch (err) {
       console.error('Voice command failed:', err);
       setError(`语音命令失败: ${err}`);
-      setIsRecording(false);
     } finally {
+      setIsRecording(false);
       setIsProcessing(false);
     }
   };
@@ -87,18 +109,22 @@ const VoiceControl: React.FC = () => {
   const handleTextCommand = async () => {
     if (!textInput.trim()) return;
     
+    const command = textInput; // Save command before clearing
+    
     try {
       setError('');
+      setResponse(''); // Clear previous response
+      setTextInput(''); // Clear input immediately for better UX
       setIsProcessing(true);
       
-      const result = await ProcessVoiceCommand(textInput);
+      const result = await ProcessTextCommand(command);
       setResponse(result);
-      setTextInput('');
       setShowHistory(true);
       await loadConversationHistory();
     } catch (err) {
       console.error('Text command failed:', err);
       setError(`文本命令失败: ${err}`);
+      setTextInput(command); // Restore input on error
     } finally {
       setIsProcessing(false);
     }
@@ -109,12 +135,17 @@ const VoiceControl: React.FC = () => {
     try {
       setError('');
       setIsProcessing(true);
+      setTranscript(''); // Clear previous transcript
       
       const text = await RecordAndTranscribe();
       
       setIsRecording(false);
-      setTranscript(text);
-      setTextInput(text); // Fill into text input for manual processing
+      setTextInput(text); // Fill into text input for editing
+      // Focus text input after transcription
+      setTimeout(() => {
+        const input = document.querySelector('.text-input') as HTMLInputElement;
+        if (input) input.focus();
+      }, 100);
     } catch (err) {
       console.error('Transcription failed:', err);
       setError(`转录失败: ${err}`);
@@ -160,14 +191,15 @@ const VoiceControl: React.FC = () => {
   };
 
   const handleQuickCommand = async (command: string) => {
-    setTextInput(command);
-    // Auto-execute
     try {
       setError('');
+      setResponse(''); // Clear previous response
+      setTextInput(command); // Show command being executed
       setIsProcessing(true);
       
-      const result = await ProcessVoiceCommand(command);
+      const result = await ProcessTextCommand(command);
       setResponse(result);
+      setTextInput(''); // Clear after success
       setShowHistory(true);
       await loadConversationHistory();
     } catch (err) {
@@ -304,11 +336,24 @@ const VoiceControl: React.FC = () => {
         </div>
       )}
 
-      {/* Transcript Display */}
-      {transcript && (
+      {/* Transcript Display - Only shown when not in text input */}
+      {transcript && !textInput && (
         <div className="transcript-box">
           <h3>📝 转录文本</h3>
           <p>{transcript}</p>
+          <button 
+            className="edit-transcript-button"
+            onClick={() => {
+              setTextInput(transcript);
+              setTranscript('');
+              setTimeout(() => {
+                const input = document.querySelector('.text-input') as HTMLInputElement;
+                if (input) input.focus();
+              }, 100);
+            }}
+          >
+            ✏️ 编辑
+          </button>
         </div>
       )}
 

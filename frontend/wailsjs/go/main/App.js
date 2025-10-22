@@ -18,6 +18,10 @@ export function IsRecording() {
   return window['go']['main']['App']['IsRecording']();
 }
 
+export function ProcessTextCommand(arg1) {
+  return window['go']['main']['App']['ProcessTextCommand'](arg1);
+}
+
 export function ProcessVoiceCommand(arg1) {
   return window['go']['main']['App']['ProcessVoiceCommand'](arg1);
 }
