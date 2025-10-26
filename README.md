@@ -4,6 +4,7 @@
 成员： 
     - Ouyixian(2018783812@qq.com): 后端+前端
     - Yanziyuan(2909870181@qq.com): 后端
+演示视频： 【七牛云笔试第二批次demo展示】 https://www.bilibili.com/video/BV1cTxKzPE5N/?share_source=copy_web&vd_source=859acc3f9fc77bd4a4a2953cd1bcab12
 
 > 🎙️ 基于大模型的语音控制桌面应用 | 让AI成为你的操作系统助手
 ## 💡 产品愿景
